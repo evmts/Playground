@@ -33,22 +33,27 @@ export function TevmPlayground() {
 
   const { data: files, isLoading: isFilesLoading } = useQuery('loadFiles', async () => {
     if (webcontainerInstance) {
-      const loadedFiles: FileNode[] = []
-      for (const [name, content] of Object.entries(initialFiles)) {
-        const fileContent = await webcontainerInstance.fs.readFile(name, 'utf-8')
-        loadedFiles.push({
-          name,
-          type: 'file',
-          content: fileContent
-        })
-      }
-      return loadedFiles
+      const loadFilesRecursively = async (dir: string): Promise<FileNode[]> => {
+        const entries = await webcontainerInstance.fs.readdir(dir, { withFileTypes: true });
+        const files = await Promise.all(entries.map(async (entry) => {
+          const fullPath = `${dir}/${entry.name}`;
+          if (entry.isDirectory()) {
+            return {
+              name: fullPath,
+              type: 'folder' as const,
+              content: '',
+              children: await loadFilesRecursively(fullPath)
+            };
+          } else {
+            const content = await webcontainerInstance.fs.readFile(fullPath, 'utf-8');
+            return { name: fullPath, type: 'file' as const, content };
+          }
+        }));
+        return files;
+      };
+      return loadFilesRecursively('');
     }
-    return Object.entries(initialFiles).map(([name, file]) => ({
-      name,
-      type: 'file' as const,
-      content: file.file.contents
-    }))
+    return [];
   }, {
     enabled: !isWebcontainerLoading,
     onSuccess: (data) => {
@@ -174,6 +179,7 @@ export function TevmPlayground() {
         installProcess.output.pipeTo(new WritableStream({
           write(data) {
             output += data
+            setExecutionResult(prev => prev + data) // Update in real-time
           }
         }))
 
@@ -188,26 +194,22 @@ export function TevmPlayground() {
       throw new Error('WebContainer not ready')
     },
     {
-      onMutate: async () => {
-        // Optimistically update the UI
-        setExecutionResult('Running npm install...')
+      onMutate: () => {
+        setExecutionResult('Running npm install...\n')
         
-        // Optionally, you could update the file list to show a temporary "node_modules" folder
         queryClient.setQueryData<FileNode[]>('loadFiles', (oldData) => {
           if (!oldData) return [];
           return [...oldData, { name: 'node_modules', type: 'folder' as const, content: '' }];
         })
       },
       onSuccess: (output) => {
-        setExecutionResult(`npm install completed successfully:\n${output}`)
-        // Refetch the file list to show the actual contents of node_modules
+        setExecutionResult(prev => `${prev}\nnpm install completed successfully.`)
         queryClient.invalidateQueries('loadFiles')
       },
       onError: (error: Error) => {
-        setExecutionResult(`Error during npm install: ${error.message}`)
+        setExecutionResult(prev => `${prev}\nError during npm install: ${error.message}`)
       },
       onSettled: () => {
-        // Refetch the file list regardless of success or failure
         queryClient.invalidateQueries('loadFiles')
       }
     }
@@ -216,6 +218,23 @@ export function TevmPlayground() {
   const handleNpmInstall = useCallback(() => {
     npmInstallMutation.mutate()
   }, [npmInstallMutation])
+
+  const renderFileTree = (files: FileNode[], depth = 0) => {
+    return files.map((file) => (
+      <div key={file.name} style={{ paddingLeft: `${depth * 20}px` }}>
+        <div
+          className={`px-4 py-3 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200 ease-in-out ${
+            selectedFile?.name === file.name ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium' : 'text-gray-700 dark:text-gray-300'
+          }`}
+          onClick={() => file.type === 'file' && handleFileSelect(file)}
+        >
+          {getFileIcon(file.name)}
+          <span className={`${isFileTreeCollapsed ? 'hidden' : ''} ml-1`}>{file.name.split('/').pop()}</span>
+        </div>
+        {file.type === 'folder' && file.children && renderFileTree(file.children, depth + 1)}
+      </div>
+    ));
+  };
 
   if (isWebcontainerLoading) {
     return <div>Loading WebContainer...</div>
@@ -291,17 +310,7 @@ export function TevmPlayground() {
             </div>
           </div>
           <ScrollArea className="flex-1">
-            {files && files.map((file) => (
-              <div
-                key={file.name}
-                className={`px-4 py-3 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200 ease-in-out ${selectedFile?.name === file.name ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium' : 'text-gray-700 dark:text-gray-300'
-                  }`}
-                onClick={() => handleFileSelect(file)}
-              >
-                {getFileIcon(file.name)}
-                <span className={`${isFileTreeCollapsed ? 'hidden' : ''} ml-1`}>{file.name}</span>
-              </div>
-            ))}
+            {files && renderFileTree(files)}
           </ScrollArea>
         </Resizable>
         <div className="flex-1 flex flex-col min-w-0">

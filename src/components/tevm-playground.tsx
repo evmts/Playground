@@ -1,18 +1,38 @@
 import { useState, useCallback, useMemo } from 'react'
 import { Editor } from '@monaco-editor/react'
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, File, Plus, Upload, Diamond, Play, Settings, Moon, Sun } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, File, Plus, Upload, Diamond, Play, Settings, Moon, Sun, Folder, FolderOpen } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Resizable } from 're-resizable'
 import { useTheme } from 'next-themes'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { initialFiles, webContainerPromise } from '../webContainerPromise.js'
+import { WebContainer } from '@webcontainer/api'
 
 interface FileNode {
   name: string
   type: 'file' | 'folder'
   content: string
   children?: FileNode[]
+}
+
+async function getAllFiles(webcontainerInstance: WebContainer, dir: string = '/', depth = 6): Promise<FileNode[]> {
+  const entries = await webcontainerInstance.fs.readdir(dir, { withFileTypes: true });
+  const files = await Promise.all(entries.map(async (entry) => {
+    const fullPath = `${dir}/${entry.name}`;
+    if (entry.isDirectory() && depth > 0) {
+      return {
+        name: fullPath,
+        type: 'folder' as const,
+        content: '',
+        children: await getAllFiles(webcontainerInstance, fullPath, depth - 1)
+      };
+    } else {
+      const content = entry.isDirectory() ? '' : await webcontainerInstance.fs.readFile(fullPath, 'utf-8');
+      return { name: fullPath, type: entry.isDirectory() ? 'folder' as const : 'file' as const, content };
+    }
+  }));
+  return files;
 }
 
 export function TevmPlayground() {
@@ -23,6 +43,7 @@ export function TevmPlayground() {
   const [sidebarWidth, setSidebarWidth] = useState(280)
   const [resultHeight, setResultHeight] = useState(200)
   const { theme, setTheme } = useTheme()
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
 
   const { data: webcontainerInstance, isLoading: isWebcontainerLoading } = useQuery('webcontainer', () => webContainerPromise, {
     refetchOnWindowFocus: false,
@@ -31,27 +52,12 @@ export function TevmPlayground() {
     refetchInterval: false,
   })
 
-  const { data: files, isLoading: isFilesLoading } = useQuery('loadFiles', async () => {
+  const { data: allFiles, isLoading: isAllFilesLoading } = useQuery('allFiles', async () => {
+      console.log('getting files...', !!webcontainerInstance)
     if (webcontainerInstance) {
-      const loadFilesRecursively = async (dir: string): Promise<FileNode[]> => {
-        const entries = await webcontainerInstance.fs.readdir(dir, { withFileTypes: true });
-        const files = await Promise.all(entries.map(async (entry) => {
-          const fullPath = `${dir}/${entry.name}`;
-          if (entry.isDirectory()) {
-            return {
-              name: fullPath,
-              type: 'folder' as const,
-              content: '',
-              children: await loadFilesRecursively(fullPath)
-            };
-          } else {
-            const content = await webcontainerInstance.fs.readFile(fullPath, 'utf-8');
-            return { name: fullPath, type: 'file' as const, content };
-          }
-        }));
-        return files;
-      };
-      return loadFilesRecursively('');
+      const files = await getAllFiles(webcontainerInstance);
+      console.log('files',  files)
+      return files
     }
     return [];
   }, {
@@ -160,11 +166,28 @@ export function TevmPlayground() {
     executeCodeMutation.mutate()
   }, [executeCodeMutation])
 
-  const getFileIcon = useCallback((fileName: string) => {
-    if (fileName.endsWith('.sol')) return <Diamond className="inline-block mr-2 h-5 w-5 text-emerald-400" />
-    if (fileName.endsWith('.ts')) return <svg className="inline-block mr-2 h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor"><path d="M1.125 0C.502 0 0 .502 0 1.125v21.75C0 23.498.502 24 1.125 24h21.75c.623 0 1.125-.502 1.125-1.125V1.125C24 .502 23.498 0 22.875 0zm17.363 9.75c.612 0 1.154.037 1.627.111a6.38 6.38 0 0 1 1.306.34v2.458a3.95 3.95 0 0 0-.643-.361 5.093 5.093 0 0 0-.717-.26 5.453 5.453 0 0 0-1.426-.2c-.3 0-.573.028-.819.086a2.1 2.1 0 0 0-.623.242c-.17.104-.3.229-.393.374a.888.888 0 0 0-.14.49c0 .196.053.373.156.529.104.156.252.304.443.444s.423.276.696.41c.273.135.582.274.926.416.47.197.892.407 1.266.628.374.222.695.473.963.753.268.279.472.598.614.957.142.359.214.776.214 1.253 0 .657-.125 1.21-.373 1.656a3.033 3.033 0 0 1-1.012 1.085 4.38 4.38 0 0 1-1.487.596c-.566.12-1.163.18-1.79.18a9.916 9.916 0 0 1-1.84-.164 5.544 5.544 0 0 1-1.512-.493v-2.63a5.033 5.033 0 0 0 3.237 1.2c.333 0 .624-.03.872-.09.249-.06.456-.144.623-.25.166-.108.29-.234.373-.38a1.023 1.023 0 0 0-.074-1.089 2.12 2.12 0 0 0-.537-.5 5.597 5.597 0 0 0-.807-.444 27.72 27.72 0 0 0-1.007-.436c-.918-.383-1.602-.852-2.053-1.405-.45-.553-.676-1.222-.676-2.005 0-.614.123-1.141.369-1.582.246-.441.58-.804 1.004-1.089a4.494 4.494 0 0 1 1.47-.629 7.536 7.536 0 0 1 1.77-.201zm-15.113.188h9.563v2.166H9.506v9.646H6.789v-9.646H3.375z" /></svg>
-    return <File className="inline-block mr-2 h-5 w-5 text-gray-400" />
+  const toggleFolder = useCallback((folderPath: string) => {
+    setExpandedFolders(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(folderPath)) {
+        newSet.delete(folderPath)
+      } else {
+        newSet.add(folderPath)
+      }
+      return newSet
+    })
   }, [])
+
+  const getFileIcon = useCallback((file: FileNode) => {
+    if (file.type === 'folder') {
+      return expandedFolders.has(file.name) 
+        ? <FolderOpen className="inline-block mr-2 h-5 w-5 text-yellow-400" />
+        : <Folder className="inline-block mr-2 h-5 w-5 text-yellow-400" />
+    }
+    if (file.name.endsWith('.sol')) return <Diamond className="inline-block mr-2 h-5 w-5 text-emerald-400" />
+    if (file.name.endsWith('.ts')) return <svg className="inline-block mr-2 h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor"><path d="M1.125 0C.502 0 0 .502 0 1.125v21.75C0 23.498.502 24 1.125 24h21.75c.623 0 1.125-.502 1.125-1.125V1.125C24 .502 23.498 0 22.875 0zm17.363 9.75c.612 0 1.154.037 1.627.111a6.38 6.38 0 0 1 1.306.34v2.458a3.95 3.95 0 0 0-.643-.361 5.093 5.093 0 0 0-.717-.26 5.453 5.453 0 0 0-1.426-.2c-.3 0-.573.028-.819.086a2.1 2.1 0 0 0-.623.242c-.17.104-.3.229-.393.374a.888.888 0 0 0-.14.49c0 .196.053.373.156.529.104.156.252.304.443.444s.423.276.696.41c.273.135.582.274.926.416.47.197.892.407 1.266.628.374.222.695.473.963.753.268.279.472.598.614.957.142.359.214.776.214 1.253 0 .657-.125 1.21-.373 1.656a3.033 3.033 0 0 1-1.012 1.085 4.38 4.38 0 0 1-1.487.596c-.566.12-1.163.18-1.79.18a9.916 9.916 0 0 1-1.84-.164 5.544 5.544 0 0 1-1.512-.493v-2.63a5.033 5.033 0 0 0 3.237 1.2c.333 0 .624-.03.872-.09.249-.06.456-.144.623-.25.166-.108.29-.234.373-.38a1.023 1.023 0 0 0-.074-1.089 2.12 2.12 0 0 0-.537-.5 5.597 5.597 0 0 0-.807-.444 27.72 27.72 0 0 0-1.007-.436c-.918-.383-1.602-.852-2.053-1.405-.45-.553-.676-1.222-.676-2.005 0-.614.123-1.141.369-1.582.246-.441.58-.804 1.004-1.089a4.494 4.494 0 0 1 1.47-.629 7.536 7.536 0 0 1 1.77-.201zm-15.113.188h9.563v2.166H9.506v9.646H6.789v-9.646H3.375z" /></svg>
+    return <File className="inline-block mr-2 h-5 w-5 text-gray-400" />
+  }, [expandedFolders])
 
   const editorTheme = useMemo(() => theme === 'dark' ? 'vs-dark' : 'light', [theme])
 
@@ -189,6 +212,13 @@ export function TevmPlayground() {
           throw new Error(`npm install failed with exit code ${exitCode}`)
         }
 
+        // Check for node_modules after install
+        const rootContents = await webcontainerInstance.fs.readdir('/')
+        if (rootContents.includes('node_modules')) {
+          const nodeModulesContents = await webcontainerInstance.fs.readdir('/node_modules')
+          output += '\n\nInstalled packages:\n' + nodeModulesContents.join('\n')
+        }
+
         return output
       }
       throw new Error('WebContainer not ready')
@@ -196,21 +226,16 @@ export function TevmPlayground() {
     {
       onMutate: () => {
         setExecutionResult('Running npm install...\n')
-        
-        queryClient.setQueryData<FileNode[]>('loadFiles', (oldData) => {
-          if (!oldData) return [];
-          return [...oldData, { name: 'node_modules', type: 'folder' as const, content: '' }];
-        })
       },
       onSuccess: (output) => {
-        setExecutionResult(prev => `${prev}\nnpm install completed successfully.`)
-        queryClient.invalidateQueries('loadFiles')
+        setExecutionResult(prev => `${prev}\nnpm install completed successfully.${output}`)
+        queryClient.invalidateQueries('allFiles')
       },
       onError: (error: Error) => {
         setExecutionResult(prev => `${prev}\nError during npm install: ${error.message}`)
       },
       onSettled: () => {
-        queryClient.invalidateQueries('loadFiles')
+        queryClient.invalidateQueries('allFiles')
       }
     }
   )
@@ -219,22 +244,31 @@ export function TevmPlayground() {
     npmInstallMutation.mutate()
   }, [npmInstallMutation])
 
-  const renderFileTree = (files: FileNode[], depth = 0) => {
+  const renderFileTree = useCallback((files: FileNode[]) => {
     return files.map((file) => (
-      <div key={file.name} style={{ paddingLeft: `${depth * 20}px` }}>
+      <div key={file.name}>
         <div
           className={`px-4 py-3 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200 ease-in-out ${
             selectedFile?.name === file.name ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium' : 'text-gray-700 dark:text-gray-300'
           }`}
-          onClick={() => file.type === 'file' && handleFileSelect(file)}
+          onClick={() => file.type === 'folder' ? toggleFolder(file.name) : handleFileSelect(file)}
         >
-          {getFileIcon(file.name)}
+          {file.type === 'folder' && (
+            expandedFolders.has(file.name) 
+              ? <ChevronDown className="inline-block mr-1 h-4 w-4" />
+              : <ChevronRight className="inline-block mr-1 h-4 w-4" />
+          )}
+          {getFileIcon(file)}
           <span className={`${isFileTreeCollapsed ? 'hidden' : ''} ml-1`}>{file.name.split('/').pop()}</span>
         </div>
-        {file.type === 'folder' && file.children && renderFileTree(file.children, depth + 1)}
+        {file.type === 'folder' && expandedFolders.has(file.name) && file.children && (
+          <div className="ml-4">
+            {renderFileTree(file.children)}
+          </div>
+        )}
       </div>
     ));
-  };
+  }, [selectedFile, isFileTreeCollapsed, getFileIcon, handleFileSelect, expandedFolders, toggleFolder]);
 
   if (isWebcontainerLoading) {
     return <div>Loading WebContainer...</div>
@@ -310,7 +344,11 @@ export function TevmPlayground() {
             </div>
           </div>
           <ScrollArea className="flex-1">
-            {files && renderFileTree(files)}
+            {isAllFilesLoading ? (
+              <div>Loading files...</div>
+            ) : (
+              allFiles && renderFileTree(allFiles)
+            )}
           </ScrollArea>
         </Resizable>
         <div className="flex-1 flex flex-col min-w-0">

@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { Editor } from '@monaco-editor/react'
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, File, Plus, Upload, Diamond, Play, Settings, Moon, Sun } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Resizable } from 're-resizable'
 import { useTheme } from 'next-themes'
+import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { initialFiles, webContainerPromise } from '../webContainerPromise.js'
 
 interface FileNode {
   name: string
@@ -14,45 +16,6 @@ interface FileNode {
 }
 
 export function TevmPlayground() {
-  const [files, setFiles] = useState<FileNode[]>([
-    {
-      name: 'SimpleStorage.sol',
-      type: 'file',
-      content: `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract SimpleStorage {
-    uint256 private storedData;
-
-    function set(uint256 x) public {
-        storedData = x;
-    }
-
-    function get() public view returns (uint256) {
-        return storedData;
-    }
-}`
-    },
-    {
-      name: 'deploy.ts',
-      type: 'file',
-      content: `import { ethers } from "hardhat";
-
-async function main() {
-  const SimpleStorage = await ethers.getContractFactory("SimpleStorage");
-  const simpleStorage = await SimpleStorage.deploy();
-
-  await simpleStorage.deployed();
-
-  console.log("SimpleStorage deployed to:", simpleStorage.address);
-}
-
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});`
-    },
-  ])
   const [selectedFile, setSelectedFile] = useState<FileNode | null>(null)
   const [isFileTreeCollapsed, setIsFileTreeCollapsed] = useState(false)
   const [isResultCollapsed, setIsResultCollapsed] = useState(false)
@@ -61,38 +24,96 @@ main().catch((error) => {
   const [resultHeight, setResultHeight] = useState(200)
   const { theme, setTheme } = useTheme()
 
-  useEffect(() => {
-    if (files.length > 0 && !selectedFile) {
-      setSelectedFile(files[0])
+  const { data: webcontainerInstance, isLoading: isWebcontainerLoading } = useQuery('webcontainer', () => webContainerPromise, {
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+    refetchInterval: false,
+  })
+
+  const { data: files, isLoading: isFilesLoading } = useQuery('loadFiles', async () => {
+    if (webcontainerInstance) {
+      const loadedFiles: FileNode[] = []
+      for (const [name, content] of Object.entries(initialFiles)) {
+        const fileContent = await webcontainerInstance.fs.readFile(name, 'utf-8')
+        loadedFiles.push({
+          name,
+          type: 'file',
+          content: fileContent
+        })
+      }
+      return loadedFiles
     }
-  }, [files, selectedFile])
+    return Object.entries(initialFiles).map(([name, file]) => ({
+      name,
+      type: 'file' as const,
+      content: file.file.contents
+    }))
+  }, {
+    enabled: !isWebcontainerLoading,
+    onSuccess: (data) => {
+      if (data && data.length > 0 && !selectedFile) {
+        setSelectedFile(data[0])
+      }
+    }
+  })
 
   const handleFileSelect = useCallback((file: FileNode) => {
     setSelectedFile(file)
   }, [])
 
-  const handleCodeChange = useCallback((value: string | undefined) => {
-    if (selectedFile && value !== undefined) {
-      setFiles(prevFiles =>
-        prevFiles.map(f =>
-          f.name === selectedFile.name ? { ...f, content: value } : f
-        )
-      )
+  const handleCodeChangeMutation = useMutation(
+    async ({ file, value }: { file: FileNode, value: string }) => {
+      if (webcontainerInstance) {
+        await webcontainerInstance.fs.writeFile(file.name, value)
+        return { name: file.name, content: value }
+      }
+      throw new Error('WebContainer not ready')
     }
-  }, [selectedFile])
+  )
 
-  const handleNewFile = useCallback(() => {
+  const handleCodeChange = useCallback(async (value: string | undefined) => {
+    if (selectedFile && value !== undefined) {
+      handleCodeChangeMutation.mutate({ file: selectedFile, value })
+    }
+  }, [selectedFile, handleCodeChangeMutation])
+
+  const handleNewFileMutation = useMutation(
+    async (newFileName: string) => {
+      if (webcontainerInstance) {
+        const newFileContent = `// New file: ${newFileName}\n`
+        await webcontainerInstance.fs.writeFile(newFileName, newFileContent)
+        return { name: newFileName, type: 'file' as const, content: newFileContent }
+      }
+    },
+    {
+      onSuccess: (newFile) => {
+        if (newFile) {
+          setSelectedFile(newFile)
+        }
+      }
+    }
+  )
+
+  const handleNewFile = useCallback(async () => {
     const newFileName = prompt('Enter new file name:')
     if (newFileName) {
-      const newFile: FileNode = {
-        name: newFileName,
-        type: 'file',
-        content: `// New file: ${newFileName}\n`
-      }
-      setFiles(prevFiles => [...prevFiles, newFile])
-      setSelectedFile(newFile)
+      handleNewFileMutation.mutate(newFileName)
     }
-  }, [])
+  }, [handleNewFileMutation])
+
+  const handleOpenFileMutation = useMutation(
+    async (files: FileList) => {
+      if (webcontainerInstance) {
+        const newFiles = await Promise.all(Array.from(files).map(async file => {
+          const content = await file.text()
+          await webcontainerInstance.fs.writeFile(file.name, content)
+          return { name: file.name, type: 'file' as const, content }
+        }))
+        return newFiles
+      }
+    }
+  )
 
   const handleOpenFile = useCallback(() => {
     const input = document.createElement('input')
@@ -101,22 +122,38 @@ main().catch((error) => {
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files
       if (files) {
-        Array.from(files).forEach(file => {
-          const reader = new FileReader()
-          reader.onload = (e) => {
-            const content = e.target?.result as string
-            setFiles(prevFiles => [...prevFiles, { name: file.name, type: 'file', content }])
-          }
-          reader.readAsText(file)
-        })
+        handleOpenFileMutation.mutate(files)
       }
     }
     input.click()
-  }, [])
+  }, [handleOpenFileMutation])
+
+  const executeCodeMutation = useMutation(
+    async () => {
+      if (webcontainerInstance) {
+        const process = await webcontainerInstance.spawn('node', ['deploy.ts'])
+        let output = ''
+        process.output.pipeTo(new WritableStream({
+          write(data) {
+            output += data
+          }
+        }))
+        await process.exit
+        return output
+      }
+    },
+    {
+      onSuccess: (output) => {
+        if (output !== undefined) {
+          setExecutionResult(output)
+        }
+      }
+    }
+  )
 
   const executeCode = useCallback(() => {
-    setExecutionResult('Code execution result would appear here.')
-  }, [])
+    executeCodeMutation.mutate()
+  }, [executeCodeMutation])
 
   const getFileIcon = useCallback((fileName: string) => {
     if (fileName.endsWith('.sol')) return <Diamond className="inline-block mr-2 h-5 w-5 text-emerald-400" />
@@ -125,6 +162,64 @@ main().catch((error) => {
   }, [])
 
   const editorTheme = useMemo(() => theme === 'dark' ? 'vs-dark' : 'light', [theme])
+
+  const queryClient = useQueryClient()
+
+  const npmInstallMutation = useMutation(
+    async () => {
+      if (webcontainerInstance) {
+        const installProcess = await webcontainerInstance.spawn('npm', ['install'])
+        
+        let output = ''
+        installProcess.output.pipeTo(new WritableStream({
+          write(data) {
+            output += data
+          }
+        }))
+
+        const exitCode = await installProcess.exit
+        
+        if (exitCode !== 0) {
+          throw new Error(`npm install failed with exit code ${exitCode}`)
+        }
+
+        return output
+      }
+      throw new Error('WebContainer not ready')
+    },
+    {
+      onMutate: async () => {
+        // Optimistically update the UI
+        setExecutionResult('Running npm install...')
+        
+        // Optionally, you could update the file list to show a temporary "node_modules" folder
+        queryClient.setQueryData<FileNode[]>('loadFiles', (oldData) => {
+          if (!oldData) return [];
+          return [...oldData, { name: 'node_modules', type: 'folder' as const, content: '' }];
+        })
+      },
+      onSuccess: (output) => {
+        setExecutionResult(`npm install completed successfully:\n${output}`)
+        // Refetch the file list to show the actual contents of node_modules
+        queryClient.invalidateQueries('loadFiles')
+      },
+      onError: (error: Error) => {
+        setExecutionResult(`Error during npm install: ${error.message}`)
+      },
+      onSettled: () => {
+        // Refetch the file list regardless of success or failure
+        queryClient.invalidateQueries('loadFiles')
+      }
+    }
+  )
+
+  const handleNpmInstall = useCallback(() => {
+    npmInstallMutation.mutate()
+  }, [npmInstallMutation])
+
+  if (isWebcontainerLoading) {
+    return <div>Loading WebContainer...</div>
+  }
 
   return (
     <div className={`flex flex-col h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-gray-100 transition-colors duration-200`}>
@@ -155,7 +250,7 @@ main().catch((error) => {
           size={{ width: sidebarWidth, height: '100%' }}
           minWidth={200}
           maxWidth={400}
-          onResize={(e, direction, ref, d) => {
+          onResize={(_e, _direction, _ref, d) => {
             setSidebarWidth(sidebarWidth + d.width)
           }}
           enable={{ right: true }}
@@ -196,7 +291,7 @@ main().catch((error) => {
             </div>
           </div>
           <ScrollArea className="flex-1">
-            {files.map((file) => (
+            {files && files.map((file) => (
               <div
                 key={file.name}
                 className={`px-4 py-3 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200 ease-in-out ${selectedFile?.name === file.name ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium' : 'text-gray-700 dark:text-gray-300'
@@ -228,7 +323,7 @@ main().catch((error) => {
                   lineHeight: 1.6,
                   padding: { top: 20, bottom: 20 },
                   smoothScrolling: true,
-                  cursorSmoothCaretAnimation: true,
+                  cursorSmoothCaretAnimation: 'on',
                   renderLineHighlight: 'all',
                   contextmenu: false,
                   bracketPairColorization: { enabled: true },
@@ -243,7 +338,7 @@ main().catch((error) => {
             size={{ height: resultHeight, width: '100%' }}
             minHeight={100}
             maxHeight={500}
-            onResize={(e, direction, ref, d) => {
+            onResize={(_e, _direction, _ref, d) => {
               setResultHeight(resultHeight + d.height)
             }}
             enable={{ top: true }}
@@ -253,6 +348,15 @@ main().catch((error) => {
             <div className="flex justify-between items-center px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
               <span className="font-semibold text-gray-700 dark:text-gray-300">Execution Result</span>
               <div className="flex items-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNpmInstall}
+                  disabled={npmInstallMutation.isLoading}
+                  className="mr-2 text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200"
+                >
+                  {npmInstallMutation.isLoading ? 'Installing...' : 'npm install'}
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"

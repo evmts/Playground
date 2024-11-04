@@ -16,20 +16,20 @@ interface FileNode {
   children?: FileNode[]
 }
 
-async function getAllFiles(webcontainerInstance: WebContainer, dir: string = '/', depth = 2): Promise<FileNode[]> {
+async function getAllFiles(webcontainerInstance: WebContainer, dir: string = '/'): Promise<FileNode[]> {
   const entries = await webcontainerInstance.fs.readdir(dir, { withFileTypes: true });
   const files = await Promise.all(entries.map(async (entry) => {
-    const fullPath = `${dir}/${entry.name}`;
-    if (entry.isDirectory() && depth > 0) {
+    const fullPath = `${dir}/${entry.name}`.replace(/\/+/g, '/');
+    if (entry.isDirectory()) {
       return {
         name: fullPath,
         type: 'folder' as const,
         content: '',
-        children: await getAllFiles(webcontainerInstance, fullPath, depth - 1)
+        children: []
       };
     } else {
-      const content = entry.isDirectory() ? '' : await webcontainerInstance.fs.readFile(fullPath, 'utf-8');
-      return { name: fullPath, type: entry.isDirectory() ? 'folder' as const : 'file' as const, content };
+      const content = await webcontainerInstance.fs.readFile(fullPath, 'utf-8');
+      return { name: fullPath, type: 'file' as const, content };
     }
   }));
   return files;
@@ -44,6 +44,7 @@ export function TevmPlayground() {
   const [resultHeight, setResultHeight] = useState(200)
   const { theme, setTheme } = useTheme()
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
+  const [fileTree, setFileTree] = useState<FileNode[]>([])
   const queryClient = useQueryClient()
 
   const { data: webcontainerInstance, isLoading: isWebcontainerLoading } = useQuery('webcontainer', () => webContainerPromise, {
@@ -53,30 +54,50 @@ export function TevmPlayground() {
     refetchInterval: false,
   })
 
-  const { data: loadedFiles, isLoading: isLoadedFilesLoading, refetch: refetchLoadedFiles } = useQuery(
+  const { isLoading: isLoadedFilesLoading, refetch: refetchLoadedFiles } = useQuery(
     ['loadedFiles', expandedFolders],
     async () => {
       if (webcontainerInstance) {
-        const files = await getAllFiles(webcontainerInstance, '/', 1);
-        const expandedFiles = await Promise.all(
-          Array.from(expandedFolders).map(async (folder) => {
-            const folderFiles = await getAllFiles(webcontainerInstance, folder, 1);
-            return folderFiles.filter(file => file.name !== folder);
-          })
-        );
-        return [...files, ...expandedFiles.flat()];
+        const rootFiles = await getAllFiles(webcontainerInstance, '/');
+        const newFileTree = [...rootFiles];
+
+        for (const folder of expandedFolders) {
+          const folderFiles = await getAllFiles(webcontainerInstance, folder);
+          updateFileTree(newFileTree, folder, folderFiles);
+        }
+
+        setFileTree(newFileTree);
       }
-      return [];
     },
     {
       enabled: !isWebcontainerLoading,
-      onSuccess: (data) => {
-        if (data && data.length > 0 && !selectedFile) {
-          setSelectedFile(data[0])
+      onSuccess: () => {
+        if (fileTree.length > 0 && !selectedFile) {
+          setSelectedFile(fileTree[0])
         }
       }
     }
   )
+
+  const updateFileTree = useCallback((tree: FileNode[], folderPath: string, files: FileNode[]) => {
+    const pathParts = folderPath.split('/').filter(Boolean);
+    let currentLevel = tree;
+
+    for (const part of pathParts) {
+      const folder = currentLevel.find(node => node.name.endsWith(`/${part}`) && node.type === 'folder');
+      if (folder && folder.children) {
+        currentLevel = folder.children;
+      } else {
+        return; // Folder not found in the tree
+      }
+    }
+
+    // Update the children of the folder
+    const folderInTree = currentLevel.find(node => node.name === folderPath);
+    if (folderInTree) {
+      folderInTree.children = files;
+    }
+  }, []);
 
   const handleFileSelect = useCallback((file: FileNode) => {
     setSelectedFile(file)
@@ -177,20 +198,19 @@ export function TevmPlayground() {
 
   const toggleFolder = useCallback((folderPath: string) => {
     setExpandedFolders(prev => {
-      const newSet = new Set(prev)
+      const newSet = new Set(prev);
       if (newSet.has(folderPath)) {
-        newSet.delete(folderPath)
+        newSet.delete(folderPath);
       } else {
-        newSet.add(folderPath)
+        newSet.add(folderPath);
       }
-      return newSet
-    })
-    refetchLoadedFiles() // Refetch files when a folder is toggled
-  }, [refetchLoadedFiles])
+      return newSet;
+    });
+  }, []);
 
   const getFileIcon = useCallback((file: FileNode) => {
     if (file.type === 'folder') {
-      return expandedFolders.has(file.name) 
+      return expandedFolders.has(file.name)
         ? <FolderOpen className="inline-block mr-2 h-5 w-5 text-yellow-400" />
         : <Folder className="inline-block mr-2 h-5 w-5 text-yellow-400" />
     }
@@ -205,7 +225,7 @@ export function TevmPlayground() {
     async () => {
       if (webcontainerInstance) {
         const installProcess = await webcontainerInstance.spawn('npm', ['install'])
-        
+
         let output = ''
         installProcess.output.pipeTo(new WritableStream({
           write(data) {
@@ -215,7 +235,7 @@ export function TevmPlayground() {
         }))
 
         const exitCode = await installProcess.exit
-        
+
         if (exitCode !== 0) {
           throw new Error(`npm install failed with exit code ${exitCode}`)
         }
@@ -237,13 +257,15 @@ export function TevmPlayground() {
       },
       onSuccess: (output) => {
         setExecutionResult(prev => `${prev}\nnpm install completed successfully.${output}`)
-        refetchLoadedFiles() // Refetch files after successful npm install
+        setExpandedFolders(new Set()) // Reset expanded folders to trigger a full refetch
+        refetchLoadedFiles()
       },
       onError: (error: Error) => {
         setExecutionResult(prev => `${prev}\nError during npm install: ${error.message}`)
       },
       onSettled: () => {
-        refetchLoadedFiles() // Refetch files after npm install, regardless of success or failure
+        setExpandedFolders(new Set()) // Reset expanded folders to trigger a full refetch
+        refetchLoadedFiles()
       }
     }
   )
@@ -252,26 +274,26 @@ export function TevmPlayground() {
     npmInstallMutation.mutate()
   }, [npmInstallMutation])
 
-  const renderFileTree = useCallback((files: FileNode[]) => {
+  const renderFileTree = useCallback((files: FileNode[], depth = 0) => {
     return files.map((file) => (
       <div key={file.name}>
         <div
-          className={`px-4 py-3 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200 ease-in-out ${
-            selectedFile?.name === file.name ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium' : 'text-gray-700 dark:text-gray-300'
-          }`}
+          className={`px-4 py-3 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200 ease-in-out ${selectedFile?.name === file.name ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium' : 'text-gray-700 dark:text-gray-300'
+            }`}
+          style={{ paddingLeft: `${depth * 16 + 16}px` }}
           onClick={() => file.type === 'folder' ? toggleFolder(file.name) : handleFileSelect(file)}
         >
           {file.type === 'folder' && (
-            expandedFolders.has(file.name) 
+            expandedFolders.has(file.name)
               ? <ChevronDown className="inline-block mr-1 h-4 w-4" />
               : <ChevronRight className="inline-block mr-1 h-4 w-4" />
           )}
           {getFileIcon(file)}
           <span className={`${isFileTreeCollapsed ? 'hidden' : ''} ml-1`}>{file.name.split('/').pop()}</span>
         </div>
-        {file.type === 'folder' && expandedFolders.has(file.name) && (
-          <div className="ml-4">
-            {renderFileTree(files.filter(f => f.name.startsWith(file.name + '/') && f.name.split('/').length === file.name.split('/').length + 1))}
+        {file.type === 'folder' && expandedFolders.has(file.name) && file.children && (
+          <div>
+            {renderFileTree(file.children, depth + 1)}
           </div>
         )}
       </div>
@@ -355,7 +377,7 @@ export function TevmPlayground() {
             {isLoadedFilesLoading ? (
               <div>Loading files...</div>
             ) : (
-              loadedFiles && renderFileTree(loadedFiles)
+              renderFileTree(fileTree)
             )}
           </ScrollArea>
         </Resizable>

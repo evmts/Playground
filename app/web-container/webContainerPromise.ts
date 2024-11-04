@@ -1,4 +1,5 @@
 import { WebContainer } from '@webcontainer/api'
+import { usePlaygroundStore } from '@/state/State'
 
 // Export initial files separately
 export const initialFiles = {
@@ -42,6 +43,9 @@ main().catch((error) => {
   'package.json': {
     file: {
       contents: `{
+  "name": "tevm-playground",
+  "description": "Interactive Solidity playground powered by TEVM",
+  "type": "module",
   "dependencies": {
     "tevm": "1.0.0-next.114",
     "@tevm/ts-plugin": "1.0.0-next.109",
@@ -77,9 +81,30 @@ export default defineConfig({
 }
 
 // Create the promise once, outside of any component
-export const getWebContainer = () => WebContainer.boot().then(async (instance) => {
-  // Mount initial files
-  await instance.mount(initialFiles)
+export async function getWebContainer() {
+  const webcontainer = await WebContainer.boot()
+  await webcontainer.mount(initialFiles)
 
-  return instance
-})
+  // Get the append function from the store
+  const appendExecutionResult = usePlaygroundStore.getState().appendExecutionResult
+
+  // Start installation in the background and pipe output to store
+  webcontainer.spawn('npm', ['install']).then(async (installProcess) => {
+    installProcess.output.pipeTo(
+      new WritableStream({
+        write(data) {
+          appendExecutionResult(`[npm install]: ${data}\n`)
+        }
+      })
+    )
+    
+    const installExitCode = await installProcess.exit
+    if (installExitCode !== 0) {
+      appendExecutionResult('[npm install]: Installation failed\n')
+    } else {
+      appendExecutionResult('[npm install]: completed successfully\n')
+    }
+  })
+
+  return webcontainer
+}

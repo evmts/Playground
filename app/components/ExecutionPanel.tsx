@@ -1,76 +1,66 @@
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Resizable } from 're-resizable'
-import { ChevronUp, ChevronDown } from 'lucide-react'
-import { usePlaygroundStore } from '@/state/State'
-import { useCallback } from 'react'
+import { Terminal } from 'xterm'
+import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
-import { Button } from "./ui/button"
+import { useQuery } from 'react-query'
+import { useCallback } from 'react'
+import { usePlaygroundStore } from '@/state/State'
+import { WebContainer } from '@webcontainer/api'
 
 interface ExecutionPanelProps {
     executeCode: () => void
+    webcontainerInstance?: WebContainer
+    outputStream: TransformStream<string, string>
 }
 
-export function ExecutionPanel({ executeCode }: ExecutionPanelProps) {
-    const { 
-        resultHeight,
-        setResultHeight,
-        isResultCollapsed,
-        setIsResultCollapsed,
-        terminal,
-        initializeTerminal,
-        disposeTerminal,
-        fitAddon
-    } = usePlaygroundStore()
+interface TerminalInstance {
+    terminal: Terminal
+    fitAddon: FitAddon
+    write: (data: string) => void
+}
+
+export function ExecutionPanel({ executeCode, webcontainerInstance, outputStream }: ExecutionPanelProps) {
+    const { data: terminalInstance } = useQuery({
+        queryKey: ['terminal'],
+        queryFn: async () => {
+            const term = new Terminal({
+                cursorBlink: true,
+                fontFamily: 'monospace',
+                fontSize: 14,
+                convertEol: true,
+                allowProposedApi: true
+            })
+
+            const fitAddon = new FitAddon()
+            term.loadAddon(fitAddon)
+
+            outputStream.readable.pipeTo(new WritableStream({
+                write: (data) => {
+                    term.write(data)
+                }
+            }))
+
+            return { terminal: term, fitAddon }
+        },
+        staleTime: Infinity,
+    })
 
     const handleTerminalMount = useCallback((element: HTMLDivElement | null) => {
-        if (element && !terminal) {
-            initializeTerminal(element)
+        console.log('Mount handler called', { element, terminalInstance })
+        if (element && terminalInstance) {
+            terminalInstance.terminal.open(element)
+            terminalInstance.fitAddon.fit()
+            terminalInstance.terminal.write('$ ')
+            terminalInstance.terminal.focus()
         }
-    }, [terminal, initializeTerminal])
-
-    const handleTerminalInput = useCallback((executeCode: () => void) => {
-        if (!terminal) return
-
-        terminal.onKey(({ key, domEvent }) => {
-            if (domEvent.keyCode === 13) { // Enter
-                executeCode()
-            } else {
-                terminal.write(key)
-            }
-        })
-    }, [terminal])
+    }, [terminalInstance])
 
     return (
-        <Resizable
-            size={{ height: resultHeight, width: '100%' }}
-            minHeight={100}
-            maxHeight={500}
-            onResizeStop={(_e, _direction, _ref, d) => {
-                setResultHeight(resultHeight + d.height)
-                fitAddon?.fit()
-            }}
-            enable={{ top: true }}
-            className={`bg-[#1a1b26] border-t border-gray-700 overflow-hidden shadow-md ${
-                isResultCollapsed ? 'h-12' : ''
-            } z-10`}
-        >
-            <div className="flex justify-between items-center px-4 py-2 border-b border-gray-700 bg-[#1a1b26]">
-                <span className="font-semibold text-gray-300">Terminal</span>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsResultCollapsed(!isResultCollapsed)}
-                    className="text-gray-400 hover:text-indigo-400 hover:bg-[#33467C]"
-                    aria-label={isResultCollapsed ? "Expand terminal" : "Collapse terminal"}
-                >
-                    {isResultCollapsed ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                </Button>
-            </div>
+        <div className="h-[300px] bg-black">
             <div 
                 ref={handleTerminalMount}
-                className={`h-[calc(100%-3rem)] ${isResultCollapsed ? 'hidden' : ''}`}
-                onClick={() => terminal?.focus()}
+                className="h-full"
+                onClick={() => terminalInstance?.terminal.focus()}
             />
-        </Resizable>
+        </div>
     )
 }

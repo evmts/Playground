@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, Suspense, lazy, useMemo } from 'react'
 import { useTheme } from 'next-themes'
 import { useQuery, useMutation } from 'react-query'
 import { MetaFunction } from '@remix-run/node'
@@ -7,9 +7,15 @@ import { json, LoaderFunctionArgs } from '@remix-run/node'
 import { useLoaderData } from '@remix-run/react'
 import { FileExplorer } from '@/components/FileExplorer'
 import { CodeEditor } from '@/components/CodeEditor'
-import { ExecutionPanel } from '@/components/ExecutionPanel'
 import { usePlaygroundStore } from '@/state/State.js'
 import { saveFilesToStorage, convertFromWebContainerFormat, initialFiles } from '@/web-container/webContainerPromise'
+import { WebContainer } from '@webcontainer/api'
+
+const LazyExecutionPanel = lazy(() => 
+  import('@/components/ExecutionPanel').then(module => ({ 
+    default: module.ExecutionPanel 
+  }))
+)
 
 export const meta: MetaFunction = () => {
     return [
@@ -37,7 +43,7 @@ export function TevmPlayground() {
     } = usePlaygroundStore()
 
     // WebContainer setup - keep using React Query
-    const { data: webContainer, isLoading: isWebcontainerLoading } = useQuery(
+    const { data: webContainer, isLoading } = useQuery(
         'webcontainer',
         () => import('@/web-container/webContainerPromise.js').then(({ getWebContainer }) => {
             return getWebContainer()
@@ -46,6 +52,10 @@ export function TevmPlayground() {
         refetchOnReconnect: false,
         refetchOnMount: false,
         refetchInterval: false,
+        onSuccess: (webContainer) => {
+            console.log('WebContainer ready, running npm install...')
+            npmInstallMutation.mutate(webContainer)
+        }
     })
 
     // Get initial files from localStorage or default to initialFiles
@@ -226,50 +236,37 @@ export function TevmPlayground() {
     }, [executeCodeMutation])
 
     // NPM installation
+    const outputStream = useMemo(() => new TransformStream<string, string>(), [])
+
     const npmInstallMutation = useMutation(
-        async () => {
-            if (webContainer) {
-                const installProcess = await webContainer.spawn('npm', ['install'])
-                let output = ''
-                installProcess.output.pipeTo(new WritableStream({
-                    write(data) {
-                        output += data
-                        appendExecutionResult(data) // Using store's append action
-                    }
-                }))
-
-                const exitCode = await installProcess.exit
-                if (exitCode !== 0) {
-                    throw new Error(`npm install failed with exit code ${exitCode}`)
+        async (webContainer: WebContainer) => {
+            const writer = outputStream.writable.getWriter()
+            await writer.write('$ npm install\n')
+            
+            const installProcess = await webContainer.spawn('npm', ['install'])
+            
+            // Pipe process output to our transform stream
+            installProcess.output.pipeTo(new WritableStream({
+                write: async (data) => {
+                    await writer.write(data)
                 }
-
-                const rootContents = await webContainer.fs.readdir('/')
-                if (rootContents.includes('node_modules')) {
-                    const nodeModulesContents = await webContainer.fs.readdir('/node_modules')
-                    output += '\n\nInstalled packages:\n' + nodeModulesContents.join('\n')
-                }
-
-                return output
+            }))
+            
+            const exitCode = await installProcess.exit
+            if (exitCode !== 0) {
+                await writer.write(`\nError: npm install failed with exit code ${exitCode}\n`)
+                throw new Error(`npm install failed with exit code ${exitCode}`)
             }
-            throw new Error('WebContainer not ready')
-        },
-        {
-            onMutate: () => {
-                setExecutionResult('Running npm install...\n')
-            },
-            onSuccess: (output) => {
-                appendExecutionResult(`\nnpm install completed successfully.${output}`)
-                refetchLoadedFiles()
-            },
-            onError: (error: Error) => {
-                appendExecutionResult(`\nError during npm install: ${error.message}`)
+
+            const rootContents = await webContainer.fs.readdir('/')
+            if (rootContents.includes('node_modules')) {
+                const nodeModulesContents = await webContainer.fs.readdir('/node_modules')
+                await writer.write('\n\nInstalled packages:\n' + nodeModulesContents.join('\n') + '\n')
             }
+
+            writer.releaseLock()
         }
     )
-
-    const handleNpmInstall = useCallback(() => {
-        npmInstallMutation.mutate()
-    }, [npmInstallMutation])
 
     // Theme
     const { theme } = useTheme()
@@ -299,7 +296,13 @@ export function TevmPlayground() {
                 />
                 
                 <div className="absolute bottom-0 left-0 right-0">
-                    <ExecutionPanel executeCode={executeCode} />
+                    <Suspense fallback={<div>Loading execution panel...</div>}>
+                        <LazyExecutionPanel 
+                            executeCode={executeCode} 
+                            webcontainerInstance={webContainer}
+                            outputStream={outputStream}
+                        />
+                    </Suspense>
                 </div>
             </div>
         </>

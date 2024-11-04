@@ -1,8 +1,10 @@
-import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Resizable } from 're-resizable'
-import { ChevronUp, ChevronDown, Play } from 'lucide-react'
+import { ChevronUp, ChevronDown } from 'lucide-react'
 import { usePlaygroundStore } from '@/state/State'
+import { useCallback } from 'react'
+import 'xterm/css/xterm.css'
+import { Button } from "./ui/button"
 
 interface ExecutionPanelProps {
     executeCode: () => void
@@ -14,8 +16,29 @@ export function ExecutionPanel({ executeCode }: ExecutionPanelProps) {
         setResultHeight,
         isResultCollapsed,
         setIsResultCollapsed,
-        executionResult
+        terminal,
+        initializeTerminal,
+        disposeTerminal,
+        fitAddon
     } = usePlaygroundStore()
+
+    const handleTerminalMount = useCallback((element: HTMLDivElement | null) => {
+        if (element && !terminal) {
+            initializeTerminal(element)
+        }
+    }, [terminal, initializeTerminal])
+
+    const handleTerminalInput = useCallback((executeCode: () => void) => {
+        if (!terminal) return
+
+        terminal.onKey(({ key, domEvent }) => {
+            if (domEvent.keyCode === 13) { // Enter
+                executeCode()
+            } else {
+                terminal.write(key)
+            }
+        })
+    }, [terminal])
 
     return (
         <Resizable
@@ -24,39 +47,30 @@ export function ExecutionPanel({ executeCode }: ExecutionPanelProps) {
             maxHeight={500}
             onResizeStop={(_e, _direction, _ref, d) => {
                 setResultHeight(resultHeight + d.height)
+                fitAddon?.fit()
             }}
             enable={{ top: true }}
-            className={`bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-hidden shadow-md ${
+            className={`bg-[#1a1b26] border-t border-gray-700 overflow-hidden shadow-md ${
                 isResultCollapsed ? 'h-12' : ''
             } z-10`}
         >
-            <div className="flex justify-between items-center px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
-                <span className="font-semibold text-gray-700 dark:text-gray-300">Execution Result</span>
-                <div className="flex items-center">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={executeCode}
-                        className="mr-2 text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900"
-                    >
-                        <Play className="h-4 w-4 mr-1" /> Run
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setIsResultCollapsed(!isResultCollapsed)}
-                        className="text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900"
-                        aria-label={isResultCollapsed ? "Expand result" : "Collapse result"}
-                    >
-                        {isResultCollapsed ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                    </Button>
-                </div>
+            <div className="flex justify-between items-center px-4 py-2 border-b border-gray-700 bg-[#1a1b26]">
+                <span className="font-semibold text-gray-300">Terminal</span>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsResultCollapsed(!isResultCollapsed)}
+                    className="text-gray-400 hover:text-indigo-400 hover:bg-[#33467C]"
+                    aria-label={isResultCollapsed ? "Expand terminal" : "Collapse terminal"}
+                >
+                    {isResultCollapsed ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                </Button>
             </div>
-            <ScrollArea className={`h-[calc(100%-3rem)] ${isResultCollapsed ? 'hidden' : ''}`}>
-                <pre className="p-4 font-mono text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                    {executionResult}
-                </pre>
-            </ScrollArea>
+            <div 
+                ref={handleTerminalMount}
+                className={`h-[calc(100%-3rem)] ${isResultCollapsed ? 'hidden' : ''}`}
+                onClick={() => terminal?.focus()}
+            />
         </Resizable>
     )
 }

@@ -9,7 +9,7 @@ import { FileExplorer } from '@/components/FileExplorer'
 import { CodeEditor } from '@/components/CodeEditor'
 import { ExecutionPanel } from '@/components/ExecutionPanel'
 import { usePlaygroundStore } from '@/state/State.js'
-import { saveFilesToStorage } from '@/web-container/webContainerPromise'
+import { saveFilesToStorage, convertFromWebContainerFormat, initialFiles } from '@/web-container/webContainerPromise'
 
 export const meta: MetaFunction = () => {
     return [
@@ -48,11 +48,27 @@ export function TevmPlayground() {
         refetchInterval: false,
     })
 
-    // File loading logic - keep using React Query
+    // Get initial files from localStorage or default to initialFiles
+    const getStoredFiles = useCallback(() => {
+        try {
+            const stored = localStorage.getItem('playground-files')
+            if (stored) {
+                return convertFromWebContainerFormat(JSON.parse(stored))
+            }
+        } catch (e) {
+            console.error('Failed to load stored files:', e)
+        }
+        // Return converted initialFiles if nothing in localStorage
+        return convertFromWebContainerFormat(initialFiles)
+    }, [])
+
+    // File loading logic with initialData
     const { data: fileTree = [], isLoading: isLoadedFilesLoading, refetch: refetchLoadedFiles } = useQuery(
         ['loadedFiles', expandedFolders],
         async () => {
-            if (webContainer) {
+            if (!webContainer) {
+            return getStoredFiles()
+            }
                 const rootFiles = await getAllFiles(webContainer, '/')
                 const newFileTree = [...rootFiles]
 
@@ -62,11 +78,9 @@ export function TevmPlayground() {
                 }
 
                 return newFileTree
-            }
-            return []
         },
         {
-            enabled: !isWebcontainerLoading,
+            initialData: getStoredFiles,
             onSuccess: (newFileTree) => {
                 if (newFileTree?.length > 0 && !selectedFile) {
                     setSelectedFile(newFileTree[0])
@@ -275,7 +289,6 @@ export function TevmPlayground() {
                 handleOpenFile={handleOpenFile}
                 handleFileSelect={setSelectedFile}
                 toggleFolder={toggleFolder}
-                isLoadingFiles={isLoadedFilesLoading}
             />
             
             <div style={{minHeight:'calc(100vh - 68px)'}} className="flex-1 flex flex-col min-w-0 h-full">

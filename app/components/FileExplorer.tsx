@@ -17,7 +17,6 @@ interface FileExplorerProps {
     handleOpenFile: () => void
     handleFileSelect: (file: FileNode) => void
     toggleFolder: (path: string) => void
-    isLoadingFiles: boolean
 }
 
 export function FileExplorer({
@@ -120,9 +119,7 @@ export function FileExplorer({
                 </div>
             </div>
             <ScrollArea className="flex-1">
-                {
-                    renderFileTree(fileTree)
-                }
+                {renderFileTree(fileTree)}
             </ScrollArea>
         </Resizable>
     )

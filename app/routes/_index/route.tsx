@@ -4,8 +4,7 @@ import { useQuery, useMutation } from 'react-query'
 import { MetaFunction } from '@remix-run/node'
 import { FileNode, getAllFiles } from '@/utils/getAllFiles'
 import { json, LoaderFunctionArgs } from '@remix-run/node'
-import { useLoaderData } from '@remix-run/react'
-import { FileExplorer } from '@/components/FileExplorer'
+import { FileExplorerSidebar } from '@/components/FileExplorerSidebar'
 import { CodeEditor } from '@/components/CodeEditor'
 import { ExecutionPanel } from '@/components/ExecutionPanel'
 import { usePlaygroundStore } from '@/state/State.js'
@@ -22,20 +21,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function Index() {
-    const data = useLoaderData<typeof loader>()
     return <TevmPlayground />
 }
 
 export function TevmPlayground() {
-    const { 
-        selectedFile, setSelectedFile,
-        isFileTreeCollapsed, setIsFileTreeCollapsed,
-        setExecutionResult, appendExecutionResult,
-        sidebarWidth, setSidebarWidth,
-        expandedFolders, toggleFolder
-    } = usePlaygroundStore()
+    const selectedFile = usePlaygroundStore(({ selectedFile }) => selectedFile)
+    const setSelectedFile = usePlaygroundStore(({ setSelectedFile }) => setSelectedFile)
+    const setExecutionResult = usePlaygroundStore(({ setExecutionResult }) => setExecutionResult)
+    const appendExecutionResult = usePlaygroundStore(({ appendExecutionResult }) => appendExecutionResult)
+    const expandedFolders = usePlaygroundStore(({ expandedFolders }) => expandedFolders)
 
-    // WebContainer setup - keep using React Query
     const { data: webContainer, isLoading: isWebcontainerLoading } = useQuery(
         'webcontainer',
         () => import('@/web-container/webContainerPromise.js').then(({ getWebContainer }) => {
@@ -231,39 +226,31 @@ export function TevmPlayground() {
         }
     )
 
-    const handleNpmInstall = useCallback(() => {
-        npmInstallMutation.mutate()
-    }, [npmInstallMutation])
-
     // Theme
     const { theme } = useTheme()
     const editorTheme = theme === 'dark' ? 'vs-dark' : 'light'
 
     return (
-        <div className="flex flex-1 h-full overflow-hidden">
-            <FileExplorer
-                sidebarWidth={sidebarWidth}
-                setSidebarWidth={setSidebarWidth}
-                isFileTreeCollapsed={isFileTreeCollapsed}
-                setIsFileTreeCollapsed={setIsFileTreeCollapsed}
-                selectedFile={selectedFile}
+        <div className="flex flex-1 h-full w-full overflow-hidden">
+            <FileExplorerSidebar
                 fileTree={fileTree}
-                expandedFolders={expandedFolders}
                 handleNewFile={handleNewFile}
                 handleOpenFile={handleOpenFile}
-                handleFileSelect={setSelectedFile}
-                toggleFolder={toggleFolder}
                 isLoadingFiles={isLoadedFilesLoading}
             />
             
-            <div className="flex-1 flex flex-col min-w-0 h-full">
-                <CodeEditor
-                    selectedFile={selectedFile}
-                    handleCodeChange={handleCodeChange}
-                    editorTheme={editorTheme}
-                />
+            <div className="flex-1 w-full">
+                <div className="overflow-hidden">
+                    <CodeEditor
+                        selectedFile={selectedFile}
+                        handleCodeChange={handleCodeChange}
+                        editorTheme={editorTheme}
+                    />
+                </div>
                 
-                <ExecutionPanel executeCode={executeCode} />
+                <div className="absolute bottom-0 left-0 right-0 translate-y-full">
+                    <ExecutionPanel executeCode={executeCode} />
+                </div>
             </div>
         </div>
     )

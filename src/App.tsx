@@ -1,4 +1,4 @@
-import { TevmPlayground } from "./components/tevm-playground"
+import { TevmPlayground } from "../app/components/tevm-playground"
 
 export function App() {
   return (

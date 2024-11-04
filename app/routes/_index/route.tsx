@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Resizable } from 're-resizable'
 import { useTheme } from 'next-themes'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
-import { webContainerPromise } from '../../app/web-container/webContainerPromise.js'
+import { webContainerPromise } from '@/web-container/webContainerPromise.js'
 import { WebContainer } from '@webcontainer/api'
 
 interface FileNode {

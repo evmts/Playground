@@ -29,9 +29,9 @@ export default function App() {
       </head>
       <body className="h-full flex">
         <QueryClientProvider client={queryClient}>
-          <div className="flex-1 h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+          <div className="flex-1 min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-gray-100 transition-colors duration-200">
             <Header />
-            <main className="flex-1">
+            <main className="flex-1 flex">
               <Outlet />
             </main>
           </div>

@@ -9,36 +9,28 @@ interface ExecutionPanelProps {
 }
 
 export function ExecutionPanel({ executeCode }: ExecutionPanelProps) {
-    const resultHeight = usePlaygroundStore(({ resultHeight }) => resultHeight)
-    const setResultHeight = usePlaygroundStore(({ setResultHeight }) => setResultHeight)
-    const isResultCollapsed = usePlaygroundStore(({ isResultCollapsed }) => isResultCollapsed)
-    const setIsResultCollapsed = usePlaygroundStore(({ setIsResultCollapsed }) => setIsResultCollapsed)
-    const executionResult = usePlaygroundStore(({ executionResult }) => executionResult)
+    const { 
+        resultHeight,
+        setResultHeight,
+        isResultCollapsed,
+        setIsResultCollapsed,
+        executionResult
+    } = usePlaygroundStore()
 
     return (
         <Resizable
             size={{ height: resultHeight, width: '100%' }}
             minHeight={100}
             maxHeight={500}
-            onResizeStop={(_e, _direction, _ref, d) => {
-                const newHeight = resultHeight + d.height
-                setResultHeight(newHeight)
+            onResize={(_e, _direction, _ref, d) => {
+                setResultHeight(resultHeight + d.height)
             }}
-            enable={{
-                top: true,
-                right: false,
-                bottom: false,
-                left: false,
-                topRight: false,
-                bottomRight: false,
-                bottomLeft: false,
-                topLeft: false
-            }}
-            className={`bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 ${
+            enable={{ top: true }}
+            className={`bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out overflow-hidden shadow-md ${
                 isResultCollapsed ? 'h-12' : ''
             }`}
         >
-            <div className="flex justify-between items-center px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            <div className="flex justify-between items-center px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
                 <span className="font-semibold text-gray-700 dark:text-gray-300">Execution Result</span>
                 <div className="flex items-center">
                     <Button
@@ -60,8 +52,8 @@ export function ExecutionPanel({ executeCode }: ExecutionPanelProps) {
                     </Button>
                 </div>
             </div>
-            <ScrollArea className={`h-[calc(100%-3rem)] overflow-auto ${isResultCollapsed ? 'hidden' : ''}`}>
-                <pre className="p-4 font-mono text-sm text-gray-700 dark:text-gray-300">
+            <ScrollArea className={`h-[calc(100%-3rem)] ${isResultCollapsed ? 'hidden' : ''}`}>
+                <pre className="p-4 font-mono text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                     {executionResult}
                 </pre>
             </ScrollArea>

@@ -77,7 +77,7 @@ export default defineConfig({
 }
 
 // Create the promise once, outside of any component
-export const webContainerPromise = WebContainer.boot().then(async (instance) => {
+export const getWebContainer = () => WebContainer.boot().then(async (instance) => {
   // Mount initial files
   await instance.mount(initialFiles)
 

@@ -245,7 +245,6 @@ export function TevmPlayground() {
             
             const installProcess = await webContainer.spawn('npm', ['install'])
             
-            // Pipe process output to our transform stream
             installProcess.output.pipeTo(new WritableStream({
                 write: async (data) => {
                     await writer.write(data)
@@ -261,9 +260,14 @@ export function TevmPlayground() {
             const rootContents = await webContainer.fs.readdir('/')
             if (rootContents.includes('node_modules')) {
                 const nodeModulesContents = await webContainer.fs.readdir('/node_modules')
-                await writer.write('\n\nInstalled packages:\n' + nodeModulesContents.join('\n') + '\n')
+                const packages = nodeModulesContents
+                    .filter(name => !name.startsWith('.'))
+                    .sort()
+                    .join('\n')
+                await writer.write('\nInstalled packages:\n' + packages + '\n')
             }
 
+            await writer.write('\nnpm install completed successfully!\n$ ')
             writer.releaseLock()
         }
     )

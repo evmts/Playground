@@ -33,6 +33,32 @@ export function ExecutionPanel({ executeCode, webcontainerInstance, outputStream
             const fitAddon = new FitAddon()
             term.loadAddon(fitAddon)
 
+            let currentLine = ''
+            term.onKey(({ key, domEvent }) => {
+                const ev = domEvent as KeyboardEvent
+                
+                switch (ev.keyCode) {
+                    case 13: // Enter
+                        term.write('\r\n$ ')
+                        currentLine = ''
+                        break
+                        
+                    case 8: // Backspace
+                        if (currentLine.length > 0) {
+                            currentLine = currentLine.slice(0, -1)
+                            term.write('\b \b')
+                        }
+                        break
+
+                    default:
+                        if (key.length === 1 && key >= ' ') {
+                            currentLine += key
+                            term.write(key)
+                        }
+                        break
+                }
+            })
+
             outputStream.readable.pipeTo(new WritableStream({
                 write: (data) => {
                     term.write(data)
@@ -45,7 +71,6 @@ export function ExecutionPanel({ executeCode, webcontainerInstance, outputStream
     })
 
     const handleTerminalMount = useCallback((element: HTMLDivElement | null) => {
-        console.log('Mount handler called', { element, terminalInstance })
         if (element && terminalInstance) {
             terminalInstance.terminal.open(element)
             terminalInstance.fitAddon.fit()

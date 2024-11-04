@@ -240,7 +240,7 @@ export function TevmPlayground() {
     const editorTheme = theme === 'dark' ? 'vs-dark' : 'light'
 
     return (
-        <div className="flex flex-1 h-full overflow-hidden">
+        <>
             <FileExplorer
                 sidebarWidth={sidebarWidth}
                 setSidebarWidth={setSidebarWidth}
@@ -256,7 +256,7 @@ export function TevmPlayground() {
                 isLoadingFiles={isLoadedFilesLoading}
             />
             
-            <div className="flex-1 flex flex-col min-w-0 h-full">
+            <div style={{minHeight:'calc(100vh - 68px)'}} className="flex-1 flex flex-col min-w-0 h-full">
                 <CodeEditor
                     selectedFile={selectedFile}
                     handleCodeChange={handleCodeChange}
@@ -265,6 +265,6 @@ export function TevmPlayground() {
                 
                 <ExecutionPanel executeCode={executeCode} />
             </div>
-        </div>
+        </>
     )
 }

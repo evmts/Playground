@@ -22,11 +22,11 @@ export function ExecutionPanel({ executeCode }: ExecutionPanelProps) {
             size={{ height: resultHeight, width: '100%' }}
             minHeight={100}
             maxHeight={500}
-            onResize={(_e, _direction, _ref, d) => {
+            onResizeStop={(_e, _direction, _ref, d) => {
                 setResultHeight(resultHeight + d.height)
             }}
             enable={{ top: true }}
-            className={`bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out overflow-hidden shadow-md ${
+            className={`bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-hidden shadow-md ${
                 isResultCollapsed ? 'h-12' : ''
             }`}
         >
@@ -37,7 +37,7 @@ export function ExecutionPanel({ executeCode }: ExecutionPanelProps) {
                         variant="outline"
                         size="sm"
                         onClick={executeCode}
-                        className="mr-2 text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200"
+                        className="mr-2 text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900"
                     >
                         <Play className="h-4 w-4 mr-1" /> Run
                     </Button>
@@ -45,7 +45,7 @@ export function ExecutionPanel({ executeCode }: ExecutionPanelProps) {
                         variant="ghost"
                         size="icon"
                         onClick={() => setIsResultCollapsed(!isResultCollapsed)}
-                        className="text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200"
+                        className="text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900"
                         aria-label={isResultCollapsed ? "Expand result" : "Collapse result"}
                     >
                         {isResultCollapsed ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}

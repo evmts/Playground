@@ -3,6 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Resizable } from 're-resizable'
 import { FileNode } from '@/utils/getAllFiles'
 import { ChevronLeft, ChevronRight, Plus, Upload, File, Folder, FolderOpen, ChevronDown, Diamond } from 'lucide-react'
+import { useState } from 'react'
 
 interface FileExplorerProps {
     sidebarWidth: number
@@ -48,7 +49,7 @@ export function FileExplorer({
         return files.map((file) => (
             <div key={file.name}>
                 <div
-                    className={`px-4 py-3 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200 ease-in-out ${
+                    className={`px-4 py-3 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900 ${
                         selectedFile?.name === file.name ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-200 font-medium' : 'text-gray-700 dark:text-gray-300'
                     }`}
                     style={{ paddingLeft: `${depth * 16 + 16}px` }}
@@ -75,14 +76,15 @@ export function FileExplorer({
         <Resizable
             size={{ width: sidebarWidth, height: '100%' }}
             minWidth={200}
-            maxWidth={400}
-            onResize={(_e, _direction, _ref, d) => {
+            maxWidth={'50%'}
+            minHeight={'calc(100vh - 68px)'}
+            onResizeStop={(_e, _direction, _ref, d) => {
                 setSidebarWidth(sidebarWidth + d.width)
             }}
             enable={{ right: true }}
             className={`bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 ${
                 isFileTreeCollapsed ? 'w-16' : ''
-            } flex flex-col transition-all duration-300 ease-in-out shadow-md`}
+            } flex flex-col overflow-x-hidden`}
         >
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                 <span className={`font-semibold text-gray-700 dark:text-gray-300 ${isFileTreeCollapsed ? 'hidden' : ''}`}>Files</span>
@@ -92,7 +94,7 @@ export function FileExplorer({
                         size="icon"
                         onClick={handleNewFile}
                         title="New File"
-                        className="mr-1 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200"
+                        className="mr-1 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900"
                     >
                         <Plus className="h-5 w-5" />
                         <span className="sr-only">New File</span>
@@ -102,7 +104,7 @@ export function FileExplorer({
                         size="icon"
                         onClick={handleOpenFile}
                         title="Open File/Folder"
-                        className="mr-1 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200"
+                        className="mr-1 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900"
                     >
                         <Upload className="h-5 w-5" />
                         <span className="sr-only">Open File/Folder</span>
@@ -111,7 +113,7 @@ export function FileExplorer({
                         variant="ghost"
                         size="icon"
                         onClick={() => setIsFileTreeCollapsed(!isFileTreeCollapsed)}
-                        className="text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900 transition-all duration-200"
+                        className="text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900"
                         aria-label={isFileTreeCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                     >
                         {isFileTreeCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}

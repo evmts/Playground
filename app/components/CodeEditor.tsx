@@ -1,5 +1,6 @@
 import { Editor } from '@monaco-editor/react'
 import { FileNode } from '@/utils/getAllFiles'
+import { usePlaygroundStore } from '@/state/State'
 
 interface CodeEditorProps {
     selectedFile: FileNode | null
@@ -19,7 +20,6 @@ export function CodeEditor({ selectedFile, handleCodeChange, editorTheme }: Code
     return (
         <div className="flex-1 overflow-hidden">
             <Editor
-                height="100%"
                 defaultLanguage={getLanguage(selectedFile.name)}
                 language={getLanguage(selectedFile.name)}
                 value={selectedFile.content}
@@ -42,6 +42,7 @@ export function CodeEditor({ selectedFile, handleCodeChange, editorTheme }: Code
                     formatOnPaste: true,
                     formatOnType: true,
                 }}
+                height="100%"
             />
         </div>
     )

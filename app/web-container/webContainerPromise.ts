@@ -116,19 +116,29 @@ export function convertFromWebContainerFormat(files: WebContainerFiles): FileNod
     }));
 }
 
-const STORAGE_KEY = 'playground-files'
+// Add version number to storage key
+export const STORAGE_VERSION = '1'
+export const STORAGE_KEY = `playground-files-v${STORAGE_VERSION}`
 
 // Get files from localStorage or use defaults
 function getInitialFiles(): WebContainerFiles {
     const storedFiles = localStorage.getItem(STORAGE_KEY)
     if (storedFiles) {
         try {
-            return JSON.parse(storedFiles)
+            const parsed = JSON.parse(storedFiles)
+            // Could add version checking logic here if needed
+            return parsed
         } catch (e) {
             console.error('Failed to parse stored files:', e)
             return initialFiles
         }
     }
+    
+    // Clear any old versions from storage
+    for (let i = 0; i < parseInt(STORAGE_VERSION); i++) {
+        localStorage.removeItem(`playground-files-v${i}`)
+    }
+    
     return initialFiles
 }
 
@@ -162,11 +172,14 @@ export async function getWebContainer() {
   return webcontainer
 }
 
-// Add helper to save files to localStorage
+// Add helper to save files to localStorage with version
 export function saveFilesToStorage(files: FileNode[]) {
     try {
         const webContainerFiles = convertToWebContainerFormat(files)
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(webContainerFiles))
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            version: STORAGE_VERSION,
+            files: webContainerFiles
+        }))
     } catch (e) {
         console.error('Failed to save files to storage:', e)
     }

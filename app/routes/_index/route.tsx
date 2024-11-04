@@ -1,6 +1,6 @@
 import { useCallback, Suspense, lazy, useMemo } from 'react'
 import { useTheme } from 'next-themes'
-import { useQuery, useMutation } from 'react-query'
+import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { MetaFunction } from '@remix-run/node'
 import { FileNode, getAllFiles } from '@/utils/getAllFiles'
 import { json, LoaderFunctionArgs } from '@remix-run/node'
@@ -8,7 +8,7 @@ import { useLoaderData } from '@remix-run/react'
 import { FileExplorer } from '@/components/FileExplorer'
 import { CodeEditor } from '@/components/CodeEditor'
 import { usePlaygroundStore } from '@/state/State.js'
-import { saveFilesToStorage, convertFromWebContainerFormat, initialFiles } from '@/web-container/webContainerPromise'
+import { saveFilesToStorage, convertFromWebContainerFormat, initialFiles, STORAGE_VERSION, STORAGE_KEY } from '@/web-container/webContainerPromise'
 import { WebContainer } from '@webcontainer/api'
 
 const LazyExecutionPanel = lazy(() => 
@@ -52,18 +52,22 @@ export function TevmPlayground() {
         refetchOnReconnect: false,
         refetchOnMount: false,
         refetchInterval: false,
-        onSuccess: (webContainer) => {
+        onSuccess: () => {
             console.log('WebContainer ready, running npm install...')
-            npmInstallMutation.mutate(webContainer)
+            runCommandMutation.mutate({ command: 'npm', args: ['install'] })
         }
     })
 
     // Get initial files from localStorage or default to initialFiles
     const getStoredFiles = useCallback(() => {
         try {
-            const stored = localStorage.getItem('playground-files')
+            const stored = localStorage.getItem(STORAGE_KEY)
             if (stored) {
-                return convertFromWebContainerFormat(JSON.parse(stored))
+                const parsed = JSON.parse(stored)
+                // Check version and handle migrations if needed
+                if (parsed.version === STORAGE_VERSION) {
+                    return convertFromWebContainerFormat(parsed.files)
+                }
             }
         } catch (e) {
             console.error('Failed to load stored files:', e)
@@ -237,37 +241,32 @@ export function TevmPlayground() {
 
     // NPM installation
     const outputStream = useMemo(() => new TransformStream<string, string>(), [])
+            const queryClient = useQueryClient()
 
-    const npmInstallMutation = useMutation(
-        async (webContainer: WebContainer) => {
+    const runCommandMutation = useMutation(
+        async ({ command, args }: { command: string, args: string[] }) => {
+            const webContainer = queryClient.getQueryData<WebContainer>('webcontainer')
+            
+            if (!webContainer) throw new Error('WebContainer not ready')
+            
             const writer = outputStream.writable.getWriter()
-            await writer.write('$ npm install\n')
+            await writer.write(`$ ${command} ${args.join(' ')}\n`)
             
-            const installProcess = await webContainer.spawn('npm', ['install'])
+            const process = await webContainer.spawn(command, args)
             
-            installProcess.output.pipeTo(new WritableStream({
+            process.output.pipeTo(new WritableStream({
                 write: async (data) => {
                     await writer.write(data)
                 }
             }))
             
-            const exitCode = await installProcess.exit
+            const exitCode = await process.exit
             if (exitCode !== 0) {
-                await writer.write(`\nError: npm install failed with exit code ${exitCode}\n`)
-                throw new Error(`npm install failed with exit code ${exitCode}`)
+                await writer.write(`\nCommand failed with exit code ${exitCode}\n`)
+                throw new Error(`Command failed with exit code ${exitCode}`)
             }
 
-            const rootContents = await webContainer.fs.readdir('/')
-            if (rootContents.includes('node_modules')) {
-                const nodeModulesContents = await webContainer.fs.readdir('/node_modules')
-                const packages = nodeModulesContents
-                    .filter(name => !name.startsWith('.'))
-                    .sort()
-                    .join('\n')
-                await writer.write('\nInstalled packages:\n' + packages + '\n')
-            }
-
-            await writer.write('\nnpm install completed successfully!\n$ ')
+            await writer.write('\n$ ')
             writer.releaseLock()
         }
     )
@@ -305,6 +304,7 @@ export function TevmPlayground() {
                             executeCode={executeCode} 
                             webcontainerInstance={webContainer}
                             outputStream={outputStream}
+                            runCommand={runCommandMutation.mutate}
                         />
                     </Suspense>
                 </div>

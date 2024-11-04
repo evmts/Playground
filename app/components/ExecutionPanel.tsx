@@ -10,6 +10,7 @@ interface ExecutionPanelProps {
     executeCode: () => void
     webcontainerInstance?: WebContainer
     outputStream: TransformStream<string, string>
+    runCommand: (params: { command: string, args: string[] }) => void
 }
 
 interface TerminalInstance {
@@ -18,7 +19,7 @@ interface TerminalInstance {
     write: (data: string) => void
 }
 
-export function ExecutionPanel({ executeCode, webcontainerInstance, outputStream }: ExecutionPanelProps) {
+export function ExecutionPanel({ executeCode, webcontainerInstance, outputStream, runCommand }: ExecutionPanelProps) {
     const { data: terminalInstance } = useQuery({
         queryKey: ['terminal'],
         queryFn: async () => {
@@ -39,7 +40,12 @@ export function ExecutionPanel({ executeCode, webcontainerInstance, outputStream
                 
                 switch (ev.keyCode) {
                     case 13: // Enter
-                        term.write('\r\n$ ')
+                        if (currentLine.trim()) {
+                            const [command, ...args] = currentLine.trim().split(' ')
+                            runCommand({ command, args })
+                        } else {
+                            term.write('\r\n$ ')
+                        }
                         currentLine = ''
                         break
                         

@@ -4,53 +4,102 @@ import { FileNode } from '@/utils/getAllFiles';
 
 // Export initial files separately
 export const initialFiles = {
-  'SimpleStorage.sol': {
+  'index.html': {
     file: {
-      contents: `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract SimpleStorage {
-    uint256 private storedData;
-
-    function set(uint256 x) public {
-        storedData = x;
-    }
-
-    function get() public view returns (uint256) {
-        return storedData;
-    }
-}`
+      contents: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tevm Example</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/main.ts"></script>
+</body>
+</html>`
     }
   },
-  'deploy.ts': {
+  'main.ts': {
     file: {
-      contents: `import { ethers } from "hardhat";
+      contents: `import { createMemoryClient, http } from "tevm";
+import { redstone } from "tevm/common";
+import { Counter } from './Counter.s.sol'
 
-async function main() {
-  const SimpleStorage = await ethers.getContractFactory("SimpleStorage");
-  const simpleStorage = await SimpleStorage.deploy();
+const app = document.querySelector("#app") as Element;
 
-  await simpleStorage.deployed();
+const memoryClient = createMemoryClient({
+  common: redstone,
+  fork: {
+    transport: http("https://rpc.redstonechain.com")({}),
+  },
+});
 
-  console.log("SimpleStorage deployed to:", simpleStorage.address);
+async function runApp() {
+  app.innerHTML = \`
+    <b>Status:</b> <span id="status">initializing</span><br/>
+    <b>Forked at block:</b> <span id="blocknumber">???</span><br/>
+    <b>Counter Contract:</b><br/>
+    <pre id="contract"></pre>
+  \`;
+
+  const status = app.querySelector("#status")!;
+  status.innerHTML = "Working";
+  
+  const blockNumber = await memoryClient.getBlockNumber();
+  document.querySelector("#blocknumber")!.innerHTML = blockNumber;
+  
+  // Show contract details
+  document.querySelector("#contract")!.innerHTML = JSON.stringify({
+    abi: Counter.abi,
+    bytecode: Counter.bytecode,
+  }, null, 2);
+  
+  status.innerHTML = "Done";
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});`
+runApp();`
+    }
+  },
+  'Counter.s.sol': {
+    file: {
+      contents: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
+
+contract Counter {
+    uint256 public number;
+
+    function setNumber(uint256 newNumber) public {
+        number = newNumber;
+    }
+
+    function increment() public {
+        number++;
+    }
+}`
     }
   },
   'package.json': {
     file: {
       contents: `{
   "name": "tevm-playground",
-  "description": "Interactive Solidity playground powered by TEVM",
   "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest",
+    "preview": "vite preview"
+  },
   "dependencies": {
-    "tevm": "1.0.0-next.114",
-    "@tevm/ts-plugin": "1.0.0-next.109",
+    "tevm": "^1.0.0-next.114",
     "viem": "^2.21.10"
+  },
+  "devDependencies": {
+    "@tevm/ts-plugin": "^1.0.0-next.114",
+    "@tevm/vite-plugin": "^1.0.0-next.114",
+    "typescript": "^5.0.2",
+    "vite": "^4.4.5",
+    "vitest": "^0.34.0"
   }
 }`
     }
@@ -59,8 +108,22 @@ main().catch((error) => {
     file: {
       contents: `{
   "compilerOptions": {
-    "strict": true
+    "target": "ES2021",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
   },
+  "include": ["src"],
   "plugins": [
     {
       "name": "@tevm/ts-plugin"
@@ -71,49 +134,53 @@ main().catch((error) => {
   },
   'vite.config.ts': {
     file: {
-      contents: `import { defineConfig } from 'vite';
-import { vitePluginTevm } from 'tevm/bundler/vite-plugin';
+      contents: `import { defineConfig } from 'vite'
+import { vitePluginTevm as tevm } from '@tevm/vite-plugin'
 
 export default defineConfig({
-  plugins: [vitePluginTevm()]
-});`
+  plugins: [tevm()],
+  test: {
+    environment: 'node',
+    globals: true
+  }
+})`
     }
   }
 }
 
 // Type for the WebContainer file format
 export type WebContainerFiles = {
-    [path: string]: {
-        file: {
-            contents: string;
-        };
+  [path: string]: {
+    file: {
+      contents: string;
     };
+  };
 }
 
 // Convert FileNode[] to WebContainer format
 export function convertToWebContainerFormat(files: FileNode[]): WebContainerFiles {
-    const result: WebContainerFiles = {};
-    
-    files.forEach(file => {
-        if (file.type === 'file') {
-            result[file.name] = {
-                file: {
-                    contents: file.content || ''
-                }
-            };
+  const result: WebContainerFiles = {};
+
+  files.forEach(file => {
+    if (file.type === 'file') {
+      result[file.name] = {
+        file: {
+          contents: file.content || ''
         }
-    });
-    
-    return result;
+      };
+    }
+  });
+
+  return result;
 }
 
 // Convert WebContainer format to FileNode[]
 export function convertFromWebContainerFormat(files: WebContainerFiles): FileNode[] {
-    return Object.entries(files).map(([name, data]) => ({
-        name,
-        type: 'file' as const,
-        content: data.file.contents
-    }));
+  return Object.entries(files).map(([name, data]) => ({
+    name,
+    type: 'file' as const,
+    content: data.file.contents
+  }));
 }
 
 // Add version number to storage key
@@ -122,65 +189,47 @@ export const STORAGE_KEY = `playground-files-v${STORAGE_VERSION}`
 
 // Get files from localStorage or use defaults
 function getInitialFiles(): WebContainerFiles {
-    const storedFiles = localStorage.getItem(STORAGE_KEY)
-    if (storedFiles) {
-        try {
-            const parsed = JSON.parse(storedFiles)
-            // Could add version checking logic here if needed
-            return parsed
-        } catch (e) {
-            console.error('Failed to parse stored files:', e)
-            return initialFiles
-        }
+  const storedFiles = localStorage.getItem(STORAGE_KEY)
+  if (storedFiles) {
+    try {
+      const parsed = JSON.parse(storedFiles)
+      // Could add version checking logic here if needed
+      return parsed
+    } catch (e) {
+      console.error('Failed to parse stored files:', e)
+      return initialFiles
     }
-    
-    // Clear any old versions from storage
-    for (let i = 0; i < parseInt(STORAGE_VERSION); i++) {
-        localStorage.removeItem(`playground-files-v${i}`)
-    }
-    
-    return initialFiles
+  }
+
+  // Clear any old versions from storage
+  for (let i = 0; i < parseInt(STORAGE_VERSION); i++) {
+    localStorage.removeItem(`playground-files-v${i}`)
+  }
+
+  return initialFiles
 }
 
 // Create the promise once, outside of any component
 export async function getWebContainer() {
-  const webcontainer = await WebContainer.boot()
-  const files = getInitialFiles()
-  await webcontainer.mount(files)
-
-  // Get the append function from the store
-  const appendExecutionResult = usePlaygroundStore.getState().appendExecutionResult
-
-  // Start installation in the background and pipe output to store
-  webcontainer.spawn('npm', ['install']).then(async (installProcess) => {
-    installProcess.output.pipeTo(
-      new WritableStream({
-        write(data) {
-          appendExecutionResult(`[npm install]: ${data}\n`)
-        }
-      })
-    )
-    
-    const installExitCode = await installProcess.exit
-    if (installExitCode !== 0) {
-      appendExecutionResult('[npm install]: Installation failed\n')
-    } else {
-      appendExecutionResult('[npm install]: completed successfully\n')
-    }
+  cachedContainer = cachedContainer ?? WebContainer.boot().then(async (webcontainer) => {
+    const files = getInitialFiles()
+    await webcontainer.mount(files)
+    return webcontainer
   })
-
-  return webcontainer
+  return cachedContainer
 }
+
+let cachedContainer: Promise<WebContainer> | undefined = undefined
 
 // Add helper to save files to localStorage with version
 export function saveFilesToStorage(files: FileNode[]) {
-    try {
-        const webContainerFiles = convertToWebContainerFormat(files)
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            version: STORAGE_VERSION,
-            files: webContainerFiles
-        }))
-    } catch (e) {
-        console.error('Failed to save files to storage:', e)
-    }
+  try {
+    const webContainerFiles = convertToWebContainerFormat(files)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: STORAGE_VERSION,
+      files: webContainerFiles
+    }))
+  } catch (e) {
+    console.error('Failed to save files to storage:', e)
+  }
 }

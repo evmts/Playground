@@ -28,48 +28,28 @@ export function ExecutionPanel({ executeCode, webcontainerInstance, outputStream
                 fontFamily: 'monospace',
                 fontSize: 14,
                 convertEol: true,
-                allowProposedApi: true
+                allowTransparency: true,
+                scrollback: 1000,
+                cols: 80,
+                rows: 24,
+                allowProposedApi: true,
             })
 
             const fitAddon = new FitAddon()
             term.loadAddon(fitAddon)
 
-            let currentLine = ''
-            term.onKey(({ key, domEvent }) => {
-                const ev = domEvent as KeyboardEvent
-                
-                switch (ev.keyCode) {
-                    case 13: // Enter
-                        if (currentLine.trim()) {
-                            const [command, ...args] = currentLine.trim().split(' ')
-                            runCommand({ command, args })
+            outputStream.readable.pipeTo(
+                new WritableStream({
+                    write: (data) => {
+                        if (typeof data === 'string') {
+                            term.write(data)
                         } else {
-                            term.write('\r\n$ ')
+                            const decoder = new TextDecoder()
+                            term.write(decoder.decode(data))
                         }
-                        currentLine = ''
-                        break
-                        
-                    case 8: // Backspace
-                        if (currentLine.length > 0) {
-                            currentLine = currentLine.slice(0, -1)
-                            term.write('\b \b')
-                        }
-                        break
-
-                    default:
-                        if (key.length === 1 && key >= ' ') {
-                            currentLine += key
-                            term.write(key)
-                        }
-                        break
-                }
-            })
-
-            outputStream.readable.pipeTo(new WritableStream({
-                write: (data) => {
-                    term.write(data)
-                }
-            }))
+                    }
+                })
+            )
 
             return { terminal: term, fitAddon }
         },

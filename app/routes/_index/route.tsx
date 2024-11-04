@@ -250,24 +250,26 @@ export function TevmPlayground() {
             if (!webContainer) throw new Error('WebContainer not ready')
             
             const writer = outputStream.writable.getWriter()
-            await writer.write(`$ ${command} ${args.join(' ')}\n`)
-            
-            const process = await webContainer.spawn(command, args)
-            
-            process.output.pipeTo(new WritableStream({
-                write: async (data) => {
-                    await writer.write(data)
+            try {
+                await writer.write(`$ ${command} ${args.join(' ')}\n`)
+                
+                const process = await webContainer.spawn(command, args)
+                
+                process.output.pipeTo(
+                    new WritableStream({
+                        write: async (data) => {
+                            await writer.write(data)
+                        }
+                    })
+                )
+                
+                const exitCode = await process.exit
+                if (exitCode !== 0) {
+                    throw new Error(`Command failed with exit code ${exitCode}`)
                 }
-            }))
-            
-            const exitCode = await process.exit
-            if (exitCode !== 0) {
-                await writer.write(`\nCommand failed with exit code ${exitCode}\n`)
-                throw new Error(`Command failed with exit code ${exitCode}`)
+            } finally {
+                writer.releaseLock()
             }
-
-            await writer.write('\n$ ')
-            writer.releaseLock()
         }
     )
 

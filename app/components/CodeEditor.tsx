@@ -9,8 +9,6 @@ interface CodeEditorProps {
 }
 
 export function CodeEditor({ selectedFile, handleCodeChange, editorTheme }: CodeEditorProps) {
-    if (!selectedFile) return null
-
     const getLanguage = (filename: string) => {
         if (filename.endsWith('.sol')) return 'sol'
         if (filename.endsWith('.json')) return 'json'
@@ -20,11 +18,16 @@ export function CodeEditor({ selectedFile, handleCodeChange, editorTheme }: Code
     return (
         <div className="flex-1 overflow-hidden">
             <Editor
-                defaultLanguage={getLanguage(selectedFile.name)}
-                language={getLanguage(selectedFile.name)}
-                value={selectedFile.content}
+                defaultLanguage={getLanguage(selectedFile?.name ?? 'loading.sol')}
+                language={getLanguage(selectedFile?.name ?? 'loading.sol')}
+                value={selectedFile?.content ?? 'loading'}
                 onChange={handleCodeChange}
                 theme={editorTheme}
+                loading={
+                    <div className="h-full w-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+                        Loading editor...
+                    </div>
+                }
                 options={{
                     minimap: { enabled: false },
                     scrollBeyondLastLine: false,

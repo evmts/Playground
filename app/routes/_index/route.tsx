@@ -263,7 +263,9 @@ export function TevmPlayground() {
                     editorTheme={editorTheme}
                 />
                 
-                <ExecutionPanel executeCode={executeCode} />
+                <div className="absolute bottom-0 left-0 right-0">
+                    <ExecutionPanel executeCode={executeCode} />
+                </div>
             </div>
         </>
     )

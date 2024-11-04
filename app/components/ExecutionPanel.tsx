@@ -28,7 +28,7 @@ export function ExecutionPanel({ executeCode }: ExecutionPanelProps) {
             enable={{ top: true }}
             className={`bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-hidden shadow-md ${
                 isResultCollapsed ? 'h-12' : ''
-            }`}
+            } z-10`}
         >
             <div className="flex justify-between items-center px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
                 <span className="font-semibold text-gray-700 dark:text-gray-300">Execution Result</span>

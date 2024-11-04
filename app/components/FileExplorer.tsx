@@ -32,7 +32,6 @@ export function FileExplorer({
     handleOpenFile,
     handleFileSelect,
     toggleFolder,
-    isLoadingFiles
 }: FileExplorerProps) {
     const getFileIcon = (file: FileNode) => {
         if (file.type === 'folder') {
@@ -121,11 +120,9 @@ export function FileExplorer({
                 </div>
             </div>
             <ScrollArea className="flex-1">
-                {isLoadingFiles ? (
-                    <div>Loading files...</div>
-                ) : (
+                {
                     renderFileTree(fileTree)
-                )}
+                }
             </ScrollArea>
         </Resizable>
     )

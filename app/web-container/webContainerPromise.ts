@@ -1,5 +1,6 @@
 import { WebContainer } from '@webcontainer/api'
 import { usePlaygroundStore } from '@/state/State'
+import { FileNode } from '@/utils/getAllFiles';
 
 // Export initial files separately
 export const initialFiles = {
@@ -80,10 +81,62 @@ export default defineConfig({
   }
 }
 
+// Type for the WebContainer file format
+export type WebContainerFiles = {
+    [path: string]: {
+        file: {
+            contents: string;
+        };
+    };
+}
+
+// Convert FileNode[] to WebContainer format
+export function convertToWebContainerFormat(files: FileNode[]): WebContainerFiles {
+    const result: WebContainerFiles = {};
+    
+    files.forEach(file => {
+        if (file.type === 'file') {
+            result[file.name] = {
+                file: {
+                    contents: file.content || ''
+                }
+            };
+        }
+    });
+    
+    return result;
+}
+
+// Convert WebContainer format to FileNode[]
+export function convertFromWebContainerFormat(files: WebContainerFiles): FileNode[] {
+    return Object.entries(files).map(([name, data]) => ({
+        name,
+        type: 'file' as const,
+        content: data.file.contents
+    }));
+}
+
+const STORAGE_KEY = 'playground-files'
+
+// Get files from localStorage or use defaults
+function getInitialFiles(): WebContainerFiles {
+    const storedFiles = localStorage.getItem(STORAGE_KEY)
+    if (storedFiles) {
+        try {
+            return JSON.parse(storedFiles)
+        } catch (e) {
+            console.error('Failed to parse stored files:', e)
+            return initialFiles
+        }
+    }
+    return initialFiles
+}
+
 // Create the promise once, outside of any component
 export async function getWebContainer() {
   const webcontainer = await WebContainer.boot()
-  await webcontainer.mount(initialFiles)
+  const files = getInitialFiles()
+  await webcontainer.mount(files)
 
   // Get the append function from the store
   const appendExecutionResult = usePlaygroundStore.getState().appendExecutionResult
@@ -107,4 +160,14 @@ export async function getWebContainer() {
   })
 
   return webcontainer
+}
+
+// Add helper to save files to localStorage
+export function saveFilesToStorage(files: FileNode[]) {
+    try {
+        const webContainerFiles = convertToWebContainerFormat(files)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(webContainerFiles))
+    } catch (e) {
+        console.error('Failed to save files to storage:', e)
+    }
 }

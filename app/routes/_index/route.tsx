@@ -9,6 +9,7 @@ import { FileExplorer } from '@/components/FileExplorer'
 import { CodeEditor } from '@/components/CodeEditor'
 import { ExecutionPanel } from '@/components/ExecutionPanel'
 import { usePlaygroundStore } from '@/state/State.js'
+import { saveFilesToStorage } from '@/web-container/webContainerPromise'
 
 export const meta: MetaFunction = () => {
     return [
@@ -94,6 +95,15 @@ export function TevmPlayground() {
         }
     }, [])
 
+    // Helper to get current file tree state
+    const saveCurrentFiles = useCallback(async () => {
+        if (webContainer) {
+            const allFiles = await getAllFiles(webContainer, '/')
+            saveFilesToStorage(allFiles)
+        }
+    }, [webContainer])
+
+    // File content changes
     const handleCodeChangeMutation = useMutation(
         async ({ file, value }: { file: FileNode, value: string }) => {
             if (webContainer) {
@@ -101,6 +111,11 @@ export function TevmPlayground() {
                 return { name: file.name, content: value }
             }
             throw new Error('webContainer not ready')
+        },
+        {
+            onSuccess: () => {
+                saveCurrentFiles()
+            }
         }
     )
 
@@ -110,7 +125,7 @@ export function TevmPlayground() {
         }
     }, [selectedFile, handleCodeChangeMutation])
 
-    // File creation and opening
+    // File creation
     const handleNewFileMutation = useMutation(
         async (newFileName: string) => {
             if (webContainer) {
@@ -123,6 +138,7 @@ export function TevmPlayground() {
             onSuccess: (newFile) => {
                 if (newFile) {
                     setSelectedFile(newFile)
+                    saveCurrentFiles()
                 }
             }
         }
@@ -135,6 +151,7 @@ export function TevmPlayground() {
         }
     }, [handleNewFileMutation])
 
+    // File opening
     const handleOpenFileMutation = useMutation(
         async (files: FileList) => {
             if (webContainer) {
@@ -144,6 +161,11 @@ export function TevmPlayground() {
                     return { name: file.name, type: 'file' as const, content }
                 }))
                 return newFiles
+            }
+        },
+        {
+            onSuccess: () => {
+                saveCurrentFiles()
             }
         }
     )

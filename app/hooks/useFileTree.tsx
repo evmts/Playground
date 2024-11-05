@@ -8,11 +8,8 @@ import { useCallback } from "react"
 import { useQuery } from "react-query"
 
 export const useFileTree = ({ webContainer }: { webContainer?: WebContainer }) => {
-  const {
-    selectedFile,
-    setSelectedFile,
-    expandedFolders
-  } = usePlaygroundStore()
+  const selectedFile  = usePlaygroundStore(({ selectedFile }) => (selectedFile))
+  const expandedFolders  = usePlaygroundStore(({ expandedFolders }) => (expandedFolders))
 
   const getStoredFiles = useCallback(() => {
     try {
@@ -65,7 +62,7 @@ export const useFileTree = ({ webContainer }: { webContainer?: WebContainer }) =
       initialData: getStoredFiles,
       onSuccess: (newFileTree) => {
         if (newFileTree?.length && !selectedFile) {
-          setSelectedFile(newFileTree[0])
+          usePlaygroundStore.getState().setSelectedFile(newFileTree[0])
         }
       }
     }

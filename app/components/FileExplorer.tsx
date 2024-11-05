@@ -12,7 +12,9 @@ interface FileExplorerProps {
 export function FileExplorer({
     webContainer,
 }: FileExplorerProps) {
-    const { isFileTreeCollapsed, setSidebarWidth, sidebarWidth } = usePlaygroundStore()
+    const isFileTreeCollapsed = usePlaygroundStore(({ isFileTreeCollapsed }) => isFileTreeCollapsed)
+    const setSidebarWidth = usePlaygroundStore(({ setSidebarWidth }) => setSidebarWidth)
+    const sidebarWidth = usePlaygroundStore(({ sidebarWidth }) => sidebarWidth)
 
     return (
         <Resizable

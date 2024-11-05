@@ -10,12 +10,12 @@ export function ExecutionPanel({ outputStream }: ExecutionPanelProps) {
     const { data: terminalInstance } = useTerminal({ outputStream })
 
     const handleTerminalMount = useCallback((element: HTMLDivElement | null) => {
-        if (element && terminalInstance) {
-            terminalInstance.terminal.open(element)
-            terminalInstance.fitAddon.fit()
-            terminalInstance.terminal.write('$ ')
-            terminalInstance.terminal.focus()
+        if (!element || !terminalInstance) {
+            return
         }
+        terminalInstance.terminal.open(element)
+        terminalInstance.fitAddon.fit()
+        terminalInstance.terminal.write('$ ')
     }, [terminalInstance])
 
     return (

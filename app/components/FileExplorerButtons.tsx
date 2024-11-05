@@ -12,8 +12,9 @@ interface FileExplorerProps {
 export function FileExplorerButtons({
     webContainer
 }: FileExplorerProps) {
-    const { isFileTreeCollapsed,
-        setIsFileTreeCollapsed } = usePlaygroundStore()
+    const isFileTreeCollapsed = usePlaygroundStore(({ isFileTreeCollapsed }) => isFileTreeCollapsed)
+    const setIsFileTreeCollapsed = usePlaygroundStore(({ setIsFileTreeCollapsed }) => setIsFileTreeCollapsed)
+
     const handleNewFileMutation = useNewFileMutation({ webContainer })
 
     const handleNewFile = useCallback(async () => {

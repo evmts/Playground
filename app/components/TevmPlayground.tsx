@@ -11,7 +11,7 @@ const LazyExecutionPanel = lazy(() =>
 
 export function TevmPlayground() {
     const outputStream = useMemo(() => new TransformStream<string, string>(), [])
-    const { webContainerQuery, runCommandMutation } = useWebContainer({ outputStream })
+    const { webContainerQuery } = useWebContainer({ outputStream })
     return (
         <>
             <FileExplorer

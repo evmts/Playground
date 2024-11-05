@@ -8,6 +8,24 @@ interface CodeEditorProps {
     webContainer?: WebContainer
 }
 
+const EDITOR_OPTIONS = {
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    fontSize: 15,
+    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+    fontLigatures: true,
+    lineHeight: 1.6,
+    padding: { top: 20, bottom: 20 },
+    smoothScrolling: true,
+    cursorSmoothCaretAnimation: 'on',
+    renderLineHighlight: 'all',
+    contextmenu: false,
+    bracketPairColorization: { enabled: true },
+    autoClosingBrackets: 'always',
+    formatOnPaste: true,
+    formatOnType: true,
+} as const
+
 export function CodeEditor({ webContainer }: CodeEditorProps) {
     const { theme } = useTheme()
 
@@ -29,29 +47,13 @@ export function CodeEditor({ webContainer }: CodeEditorProps) {
                 value={selectedFile?.content ?? 'loading'}
                 onChange={value => handleCodeChangeMutation.mutate({ value })}
                 theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                options={EDITOR_OPTIONS}
+                height="100%"
                 loading={
                     <div className="h-full w-full flex items-center justify-center text-gray-500 dark:text-gray-400">
                         Loading editor...
                     </div>
                 }
-                options={{
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 15,
-                    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                    fontLigatures: true,
-                    lineHeight: 1.6,
-                    padding: { top: 20, bottom: 20 },
-                    smoothScrolling: true,
-                    cursorSmoothCaretAnimation: 'on',
-                    renderLineHighlight: 'all',
-                    contextmenu: false,
-                    bracketPairColorization: { enabled: true },
-                    autoClosingBrackets: 'always',
-                    formatOnPaste: true,
-                    formatOnType: true,
-                }}
-                height="100%"
             />
         </div>
     )

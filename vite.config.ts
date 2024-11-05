@@ -11,12 +11,27 @@ const { RemixVitePWAPlugin, RemixPWAPreset } = RemixVitePWA()
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    }
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    }
+  },
   plugins: [
     remix({
-      presets: [vitePluginTevm(), RemixPWAPreset()]
+      presets: [vitePluginTevm(), RemixPWAPreset()],
+      // Add headers to the server response
+      serverModuleFormat: 'esm',
     }),
     RemixVitePWAPlugin({ registerType: 'prompt' }),
     tsconfigPaths(),
+    // Keep your existing middleware for development
     {
       name: 'configure-response-headers',
       configureServer(server) {

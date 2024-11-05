@@ -1,28 +1,34 @@
 import { Editor } from '@monaco-editor/react'
-import { FileNode } from '@/utils/getAllFiles'
-import { usePlaygroundStore } from '@/state/State'
+import { useTheme } from 'next-themes'
+import { usePlaygroundStore } from '@/state/usePlaygroundStore'
+import { WebContainer } from '@webcontainer/api'
+import { useHandleCodeChange } from '@/hooks/useHandleCodeChange'
 
 interface CodeEditorProps {
-    selectedFile: FileNode | null
-    handleCodeChange: (value: string | undefined) => void
-    editorTheme: string
+    webContainer?: WebContainer
 }
 
-export function CodeEditor({ selectedFile, handleCodeChange, editorTheme }: CodeEditorProps) {
-    const getLanguage = (filename: string) => {
+export function CodeEditor({ webContainer }: CodeEditorProps) {
+    const { theme } = useTheme()
+
+    const selectedFile = usePlaygroundStore(({ selectedFile }) => selectedFile)
+
+    const language = ((filename: string) => {
         if (filename.endsWith('.sol')) return 'sol'
         if (filename.endsWith('.json')) return 'json'
         return 'typescript'
-    }
+    })(selectedFile?.name ?? 'loading.sol')
+
+    const handleCodeChangeMutation = useHandleCodeChange({ webContainer })
 
     return (
         <div className="flex-1 overflow-hidden">
             <Editor
-                defaultLanguage={getLanguage(selectedFile?.name ?? 'loading.sol')}
-                language={getLanguage(selectedFile?.name ?? 'loading.sol')}
+                defaultLanguage={language}
+                language={language}
                 value={selectedFile?.content ?? 'loading'}
-                onChange={handleCodeChange}
-                theme={editorTheme}
+                onChange={value => handleCodeChangeMutation.mutate({ value })}
+                theme={theme === 'dark' ? 'vs-dark' : 'light'}
                 loading={
                     <div className="h-full w-full flex items-center justify-center text-gray-500 dark:text-gray-400">
                         Loading editor...

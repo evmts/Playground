@@ -1,37 +1,19 @@
 import { usePlaygroundStore } from "@/state/usePlaygroundStore"
 import { convertFromWebContainerFormat } from "@/web-container/convertFromWebContainerFormat"
 import { getAllFiles } from "@/web-container/getAllFiles"
-import { initialFiles } from "@/web-container/initialFiles"
-import { STORAGE_KEY, STORAGE_VERSION } from "@/web-container/localStorage"
+import { getInitialFiles } from "@/web-container/getInitialFiles"
 import { WebContainer } from "@webcontainer/api"
-import { useCallback } from "react"
 import { useQuery } from "react-query"
 
 export const useFileTree = ({ webContainer }: { webContainer?: WebContainer }) => {
   const selectedFile  = usePlaygroundStore(({ selectedFile }) => (selectedFile))
   const expandedFolders  = usePlaygroundStore(({ expandedFolders }) => (expandedFolders))
 
-  const getStoredFiles = useCallback(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        // Check version and handle migrations if needed
-        if (parsed.version === STORAGE_VERSION) {
-          return convertFromWebContainerFormat(parsed.files)
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load stored files:', e)
-    }
-    return convertFromWebContainerFormat(initialFiles)
-  }, [])
-
   return useQuery(
     ['loadedFiles', expandedFolders],
     async () => {
       if (!webContainer) {
-        return getStoredFiles()
+        return convertFromWebContainerFormat(getInitialFiles())
       }
       const rootFiles = await getAllFiles(webContainer, '/')
       const newFileTree = [...rootFiles]
@@ -59,7 +41,6 @@ export const useFileTree = ({ webContainer }: { webContainer?: WebContainer }) =
       return newFileTree
     },
     {
-      initialData: getStoredFiles,
       onSuccess: (newFileTree) => {
         if (newFileTree?.length && !selectedFile) {
           usePlaygroundStore.getState().setSelectedFile(newFileTree[0])

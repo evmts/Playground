@@ -18,8 +18,7 @@ export function TevmPlayground() {
                 webContainer={webContainerQuery.data}
             />
             <div style={{ minHeight: 'calc(100vh - 68px)' }} className="flex-1 flex flex-col min-w-0 h-full">
-                <CodeEditor
-                />
+                <CodeEditor/>
                 <div className="absolute bottom-0 left-0 right-0">
                     <Suspense fallback={<div>Loading execution panel...</div>}>
                         <LazyExecutionPanel

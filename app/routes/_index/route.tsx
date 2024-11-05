@@ -11,7 +11,7 @@ export const meta: MetaFunction = () => {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-    return json(request)
+    return json({})
 }
 
 export default function Index() {

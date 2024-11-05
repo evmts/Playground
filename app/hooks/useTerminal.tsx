@@ -1,5 +1,3 @@
-import { Terminal } from 'xterm'
-import { FitAddon } from 'xterm-addon-fit'
 import { useQuery } from 'react-query'
 
 interface ExecutionPanelProps {
@@ -10,6 +8,11 @@ export function useTerminal({ outputStream }: ExecutionPanelProps) {
     return useQuery({
         queryKey: ['terminal'],
         queryFn: async () => {
+            const [{ Terminal }, { FitAddon }] = await Promise.all([
+                import('xterm'),
+                import('xterm-addon-fit')
+            ])
+
             const term = new Terminal({
                 cursorBlink: true,
                 fontFamily: 'monospace',
